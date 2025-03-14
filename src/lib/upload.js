@@ -2,6 +2,16 @@ const axios = require('axios')
 const FormData = require('form-data')
 const uuid = require('uuid')
 const accountManager = require('./account')
+const OSS = require('ali-oss')
+
+function generateISODate() {
+  const now = new Date()
+  return now.toISOString()
+    .replace(/-/g, '')
+    .replace(/:/g, '')
+    .replace(/\.\d{3}/, '')
+}
+
 
 async function upload(fileBase64, authToken) {
   const fileType = fileBase64.split('base64,')[0]
@@ -30,7 +40,20 @@ async function upload(fileBase64, authToken) {
     const access_key_secret = file_url_data.data.access_key_secret
     const security_token = file_url_data.data.security_token
     const date = new Date().toISOString().split('T')[0]
-    console.log(date);
+    const x_oss_date = generateISODate()
+
+    const client = new OSS({
+      // 从环境变量中获取访问凭证。运行本代码示例之前，请确保已设置环境变量OSS_ACCESS_KEY_ID和OSS_ACCESS_KEY_SECRET。
+      accessKeyId: access_key_id,
+      accessKeySecret: access_key_secret,
+      // yourRegion填写Bucket所在地域。以华东1（杭州）为例，Region填写为oss-cn-hangzhou。
+      region: 'ap-southeast-1',
+      authorizationV4: true,
+      // yourBucketName填写Bucket名称。
+      bucket: 'qwen-webui-prod',
+    })
+
+    const signature = ""
 
     const put_file_data = await axios.put(`https://qwen-webui-prod.oss-ap-southeast-1.aliyuncs.com/${file_path}`, fileData, {
       headers: {
@@ -40,8 +63,9 @@ async function upload(fileBase64, authToken) {
         "Accept-Encoding": "gzip, deflate, br, zstd",
         "Content-Type": "image/png",
         "sec-ch-ua-platform": "\"Windows\"",
-        "authorization": `OSS4-HMAC-SHA256 Credential=${access_key_id}/${date}/ap-southeast-1/oss/aliyun_v4_request,Signature=2995a83946293f65ea13b0414f0004f4d288d5d24bceb8f7f06450b1fe380b24`,
+        "authorization": `OSS4-HMAC-SHA256 Credential=${access_key_id}/${date}/ap-southeast-1/oss/aliyun_v4_request,Signature=${signature}`,
         "x-oss-security-token": security_token,
+        "x-oss-date": x_oss_date,
         "sec-ch-ua": "\"Chromium\";v=\"134\", \"Not:A-Brand\";v=\"24\", \"Microsoft Edge\";v=\"134\"",
         "sec-ch-ua-mobile": "?0",
         "x-oss-user-agent": "aliyun-sdk-js/6.22.0 Microsoft Edge 134.0.0.0 on Windows 10 64-bit",

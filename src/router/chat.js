@@ -35,26 +35,25 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
   console.log(`[${new Date().toLocaleString()}]: model: ${req.body.model} | stream: ${req.body.stream} | authToken: ${authToken.replace('Bearer ', '').slice(0, Math.floor(authToken.length / 2))}...`)
 
 
-  let file_url = null
-  const isFileMessage = Array.isArray(messages[messages.length - 1].content) === true
+  // let file_url = null
+  // const isFileMessage = Array.isArray(messages[messages.length - 1].content) === true
 
-  if (isFileMessage) {
+  // if (isFileMessage) {
 
-    const file = messages[messages.length - 1].content.filter(item => item.type !== 'text')[0]
+  //   const file = messages[messages.length - 1].content.filter(item => item.type !== 'text')[0]
 
-    if (file && file.type === 'image_url') {
-      file_url = await upload(file.image_url.url, authToken)
-    } 
+  //   if (file && file.type === 'image_url') {
+  //     file_url = await upload(file.image_url.url, authToken)
+  //   } 
 
-    if (file_url) {
-      messages[messages.length - 1].content[messages[messages.length - 1].content.length - 1] = {
-        "type": "image",
-        "image": file_url
-      }
-    }
-  }
+  //   if (file_url) {
+  //     messages[messages.length - 1].content[messages[messages.length - 1].content.length - 1] = {
+  //       "type": "image",
+  //       "image": file_url
+  //     }
+  //   }
+  // }
 
-  console.log(file_url)
 
   const notStreamResponse = async (response) => {
     try {

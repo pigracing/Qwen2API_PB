@@ -1,6 +1,6 @@
 const axios = require('axios')
 const uuid = require('uuid')
-const accountManager = require('./account')
+const accountManager = require('./account.js')
 const sendChatRequest = async (model, messages, stream, authToken) => {
   if (!messages[messages.length - 1].chat_type) {
     messages[messages.length - 1].chat_type = "t2t"
@@ -45,15 +45,16 @@ const sendChatRequest = async (model, messages, stream, authToken) => {
     body.model = body.model.replace('-search', '')
     body.chat_type = 'search'
   }
-
-  const models = await accountManager.getModels()
-  if (!models.includes(body.model)) {
-    body.model = 'qwq-32b'
+  if (accountManager) {
+    const models = await accountManager.getModels()
+    if (!models.includes(body.model)) {
+      body.model = 'qwq-32b'
+    }
   }
 
   try {
 
-    // console.log(JSON.stringify(body))
+    console.log(JSON.stringify(body))
     const response = await axios.post('https://chat.qwen.ai/api/chat/completions',
       body,
       {
