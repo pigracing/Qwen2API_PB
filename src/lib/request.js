@@ -54,7 +54,7 @@ const sendChatRequest = async (model, messages, stream, authToken) => {
 
   try {
 
-    console.log(JSON.stringify(body))
+    // console.log(JSON.stringify(body))
     const response = await axios.post('https://chat.qwen.ai/api/chat/completions',
       body,
       {
@@ -71,7 +71,7 @@ const sendChatRequest = async (model, messages, stream, authToken) => {
     }
   }
   catch (error) {
-    // console.log(123, error)
+    console.log(123, error)
     // process.exit(0)
     return {
       status: 500,
