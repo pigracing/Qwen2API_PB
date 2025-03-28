@@ -35,10 +35,10 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
     > API 密钥 (非必填)
 
     > 如果需要使用多账户或使用内置账户，请填写此项
-- ACCOUNT_TOKENS: 账号token
-    > 账号token：多个账号使用","分隔
+- ACCOUNT_TOKENS: 账号token或账号密码
+    > 账号token：多个账号使用","分隔，账号密码之间用";"分隔
 
-    > 示例：ey1...,ey2...,ey3...
+    > 示例：ey1...,ey2...,ey3...,username1;password1,username2;password2
 - SEARCH_INFO_MODE: 搜索信息展示模式
     > 搜索信息展示模式，可选 table 或 text
 

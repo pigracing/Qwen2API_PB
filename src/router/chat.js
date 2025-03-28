@@ -22,7 +22,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
 
   if (authToken === `Bearer ${process.env.API_KEY}` && accountManager) {
     authToken = accountManager.getAccountToken()
-  } else {
+  } else if (authToken) {
     authToken = authToken.replace('Bearer ', '')
   }
 
@@ -32,7 +32,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
   }
   const stream = req.body.stream
 
-  console.log(`[${new Date().toLocaleString()}]: model: ${req.body.model} | stream: ${req.body.stream} | authToken: ${authToken.replace('Bearer ', '').slice(0, Math.floor(authToken.length / 2))}...`)
+  console.log(`[${new Date().toLocaleString()}]: model: ${req.body.model} | stream: ${stream} | authToken: ${authToken.replace('Bearer ', '').slice(0, Math.floor(authToken.length / 2))}...`)
 
 
   let file_url = null
@@ -44,18 +44,43 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
 
     if (file && file.type === 'image_url') {
       file_url = await uploadImage(file.image_url.url, authToken)
-    } 
+    }
 
     if (file_url) {
       messages[messages.length - 1].content[messages[messages.length - 1].content.length - 1] = {
         "type": "image",
         "image": file_url,
       }
+    } else {
+      res.status(500)
+        .json({
+          error: "请求发送失败！！！"
+        })
+      return
+    }
+  }
+
+  const setResHeader = (stream) => {
+    try {
+      if (stream) {
+        res.set({
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        })
+      } else {
+        res.set({
+          'Content-Type': 'application/json',
+        })
+      }
+    } catch (e) {
+      console.log(e)
     }
   }
 
 
   const notStreamResponse = async (response) => {
+    setResHeader(false)
     try {
       // console.log(response)
       const bodyTemplate = {
@@ -98,6 +123,9 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
       let temp_content = ''
       let thinkEnd = false
 
+      response.on('start', () => {
+        setResHeader(true)
+      })
       response.on('data', async (chunk) => {
         const decodeText = decoder.decode(chunk, { stream: true })
         // console.log(decodeText)
@@ -202,7 +230,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
       response_data = await sendChatRequest(req.body.model, messages, stream, authToken)
     }
 
-    if (response_data.status === !200) {
+    if (response_data.status === !200 || !response_data.response) {
       res.status(500)
         .json({
           error: "请求发送失败！！！"
@@ -222,11 +250,6 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
     }
 
     if (stream) {
-      res.set({
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      })
       if (req.body.model.includes('-draw')) {
         const StreamTemplate = {
           "id": `chatcmpl-${uuid.v4()}`,
@@ -242,6 +265,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
             }
           ]
         }
+        setResHeader(stream)
         res.write(`data: ${JSON.stringify(StreamTemplate)}\n\n`)
         res.write(`data: [DONE]\n\n`)
         res.end()
@@ -250,10 +274,6 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
       }
 
     } else {
-
-      res.set({
-        'Content-Type': 'application/json',
-      })
       if (req.body.model.includes('-draw')) {
         const bodyTemplate = {
           "id": `chatcmpl-${uuid.v4()}`,
@@ -276,6 +296,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
             "total_tokens": 2048
           }
         }
+        setResHeader(stream)
         res.json(bodyTemplate)
       } else {
         notStreamResponse(response_data.response)
