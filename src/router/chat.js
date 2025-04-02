@@ -126,6 +126,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
       response.on('start', () => {
         setResHeader(true)
       })
+
       response.on('data', async (chunk) => {
         const decodeText = decoder.decode(chunk, { stream: true })
         // console.log(decodeText)
@@ -226,6 +227,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
     let response_data = null
     if (req.body.model.includes('-draw')) {
       response_data = await createImageRequest(req.body.messages[req.body.messages.length - 1].content, req.body.model, '1024*1024', authToken)
+      console.log(response_data)
     } else {
       response_data = await sendChatRequest(req.body.model, messages, stream, authToken)
     }
@@ -239,7 +241,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
     }
 
     if (req.body.model.includes('-draw')) {
-      response_data = await awaitImage(response_data.task_id, authToken)
+      response_data = await awaitImage(response_data.response, authToken)
       if (response_data.status !== 200) {
         res.status(500)
           .json({

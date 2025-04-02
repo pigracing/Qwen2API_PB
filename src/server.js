@@ -3,18 +3,18 @@ const bodyParser = require('body-parser')
 const app = express()
 const dotenv = require('dotenv')
 dotenv.config()
-const accountManager = require('./lib/account.js')
-const homeRouter = require('./router/home.js')
+
 const modelsRouter = require('./router/models.js')
 const chatRouter = require('./router/chat.js')
 const imagesRouter = require('./router/images.js')
+const verifyRouter = require('./router/verify.js')
 
 app.use(bodyParser.json({ limit: '128mb' }))
 app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }))
-app.use(homeRouter)
 app.use(modelsRouter)
 app.use(chatRouter)
 app.use(imagesRouter)
+app.use(verifyRouter)
 
 const startInfo = `
 -------------------------------------------------------------------

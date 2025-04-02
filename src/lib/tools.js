@@ -1,4 +1,6 @@
 const crypto = require('crypto')
+const { jwtDecode } = require('jwt-decode')
+
 
 const isJson = (str) => {
   try {
@@ -13,7 +15,7 @@ const sleep = async (ms) => {
   return await new Promise(resolve => setTimeout(resolve, ms))
 }
 
-function sha256Encrypt(text) {
+const sha256Encrypt = (text) => {
   if (typeof text !== 'string') {
     throw new Error('输入必须是字符串类型')
   }
@@ -22,8 +24,19 @@ function sha256Encrypt(text) {
   return hash.digest('hex')
 }
 
+const JwtDecode = (token) => {
+  try {
+    const decoded = jwtDecode(token, { complete: true })
+    return decoded
+  } catch (error) {
+    console.error('解析JWT失败:', error.message)
+    return null
+  }
+}
+
 module.exports = {
   isJson,
   sleep,
-  sha256Encrypt
+  sha256Encrypt,
+  JwtDecode
 }

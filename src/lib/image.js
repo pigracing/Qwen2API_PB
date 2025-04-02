@@ -44,28 +44,29 @@ async function createImageRequest(prompt, model = 'qwen-max-latest', size = '102
 
     return {
       status: 200,
-      task_id: response.data.messages.find(item => item.role === 'assistant').extra.wanx.task_id
+      response: response.data.messages[response.data.messages.length - 1].extra.wanx.task_id
     }
 
   } catch (error) {
     console.log(error)
     return {
       status: 500,
-      task_id: null
+      response: null
     }
   }
 
 }
 
 async function awaitImage(task_id, authorization) {
+  console.log(task_id, authorization)
 
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 60; i++) {
     try {
       const response = await axios.get(`https://chat.qwen.ai/api/v1/tasks/status/${task_id}`, {
         headers: accountManager.getHeaders(authorization)
       })
       if (response.data.content !== '') {
-        // console.log(`等待图片生成完成...`)
+        console.log(`等待图片生成完成...`)
         return {
           status: 200,
           url: response.data.content
@@ -74,7 +75,7 @@ async function awaitImage(task_id, authorization) {
     } catch (error) {
       continue
     }
-    // console.log(`等待次数: ${i + 1}`)
+    console.log(`等待次数: ${i + 1}`)
     await sleep(6000)
   }
 

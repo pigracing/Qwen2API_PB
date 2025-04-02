@@ -1,19 +1,27 @@
 const axios = require('axios')
 const { sha256Encrypt } = require('./tools')
+const fs = require('fs')
+const path = require('path')
+const { JwtDecode } = require('./tools')
 
 class Account {
   constructor(accountTokens) {
-    this.accountTokens = this.init(accountTokens)
-    this.errorAccountTokens = []
+    this.accountTokens = []
+    this.init(accountTokens)
     this.currentIndex = 0
-    this.requestNumber = 0
-    this.checkAllAccountTokens()
     this.models = [
       "qwen-max-latest",
       "qwen-plus-latest",
       "qwen-turbo-latest",
-      "qwq-32b"
+      "qwq-32b",
+      "qvq-72b-preview-0310",
+      "qwen2.5-omni-7b",
+      "qwen2.5-72b-instruct",
+      "qwen2.5-coder-32b-instruct",
+      "qwen2.5-14b-instruct-1m",
+      "qwen2.5-vl-32b-instruct"
     ]
+
     this.defaultHeaders = {
       "Host": "chat.qwen.ai",
       "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
@@ -39,30 +47,54 @@ class Account {
   }
 
   init(accountTokens) {
-    const accountTokensArray = accountTokens.split(',')
-    const accounts = []
-    accountTokensArray.forEach(async (token) => {
-      if (token.includes(';')) {
-        const account = token.split(';')
-        const username = account[0]
-        const password = account[1]
-        accounts.push({
-          type: 'username_password',
-          username: username,
-          password: password,
-          token: await this.login(username, password)
-        })
-      } else {
-        accounts.push({
-          type: 'token',
-          username: null,
-          password: null,
-          token: token
-        })
+    const accountTokensPath = path.join(__dirname, '../../data/accountTokens.json')
+    const proxyHandler = {
+      set: (target, prop, value) => {
+        target[prop] = value
+        fs.writeFileSync(accountTokensPath, JSON.stringify(this.accountTokens, null, 2))
+        return true
       }
+    }
 
-    })
-    return accounts
+    this.accountTokens = new Proxy(this.accountTokens, proxyHandler)
+
+
+    if (fs.existsSync(accountTokensPath)) {
+      this.accountTokens = JSON.parse(fs.readFileSync(accountTokensPath, 'utf-8'))
+    } else {
+      const accountTokensArray = accountTokens.split(',')
+      accountTokensArray.forEach(async (token) => {
+        if (token.includes(';')) {
+          const account = token.split(';')
+          const username = account[0]
+          const password = account[1]
+          const accountToken = await this.login(username, password)
+          if (accountToken) {
+            const decoded = JwtDecode(accountToken)
+            this.accountTokens.push({
+              type: 'username_password',
+              username: username,
+              password: password,
+              token: accountToken,
+              requestNumber: 0,
+              expiresAt: decoded.exp
+            })
+          }
+        } else {
+          const decoded = JwtDecode(token)
+          this.accountTokens.push({
+            type: 'token',
+            username: null,
+            password: null,
+            token: token,
+            requestNumber: 0,
+            expiresAt: decoded.exp
+          })
+        }
+
+      })
+    }
+
   }
 
   getAccountToken() {
@@ -81,43 +113,24 @@ class Account {
 
   async checkAccountToken(token) {
     try {
-      await axios.get('https://chat.qwen.ai/api/models',
-        {
-          headers: {
-            "Authorization": `Bearer ${token}`,
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      await axios.get('https://chat.qwen.ai/api/chat/completions', {
+        "model": "qwq-32b",
+        "messages": [
+          {
+            "role": "user",
+            "content": "你好"
           }
-        })
+        ],
+        "stream": false,
+        "chat_type": "t2t",
+        "id": uuid.v4()
+      }, {
+        headers: this.getHeaders(token)
+      })
       return true
     } catch (error) {
       return false
     }
-  }
-
-  async checkAllAccountTokens() {
-    for (const token of this.accountTokens) {
-      const isTokenValid = await this.checkAccountToken(token)
-      if (!isTokenValid) {
-        this.errorAccountTokens.push(token.slice(0, Math.floor(token.length / 2)) + '...')
-        this.accountTokens.splice(this.accountTokens.indexOf(token), 1)
-      }
-    }
-  }
-
-  getAccountTokensNumber() {
-    return this.accountTokens.length
-  }
-
-  getRequestNumber() {
-    return this.requestNumber
-  }
-
-  getErrorAccountTokens() {
-    return this.errorAccountTokens
-  }
-
-  getErrorAccountTokensNumber() {
-    return this.errorAccountTokens.length
   }
 
   async getModelList() {
@@ -187,7 +200,7 @@ class Account {
     const headers = {
       ...this.defaultHeaders,
       "authorization": `Bearer ${authToken}`,
-      "cookie": `_gcl_au=1.1.828597960.1740456102;cna=qS5EIEcjlH0BASQOBGAZfs5p;acw_tc=13b5be1680f7cde2106f40ee928d097af327aba086a9228880897a73ecb3aafb;token=${authToken};xlly_s=1;ssxmod_itna=mqUxRDBDnD00I4eKYIxAK0QD2W3nDAQDRDl4Bti=GgexFqAPqDHIa3vY8i0W0DjObNem07GneDl=24oDSxD6HDK4GTmzgh2rse77ObPpKYQ7R2xK7Amx4cTilPo+gY=GEUPn3rMI6FwDCPDExGkPrmrDeeaDCeDQxirDD4DADibe4D1GDDkD0+m7UovW4GWDm+mDWPDYxDrbRYDRPxD0ZmGDQI3aRDDBgGqob0CESfGR4bUO+hLGooD9E4DsO2nQYO6Wk=qGS8uG13bQ40kmq0OC4bAeILQa38vvb4ecEDoV=mxYamN10DOK0ZIGNjGN0DK02kt+4j0xRG4lhrQwFfYoDDWmAq8es8mGmACAT1ju1m7YTi=eDofhpY847DtKYxIO+gG=lDqeDpFidgOD/MhKhx4D;ssxmod_itna2=mqUxRDBDnD00I4eKYIxAK0QD2W3nDAQDRDl4Bti=GgexFqAPqDHIa3vY8i0W0DjObNem07GeDAYg25EoK0Gx03K+UeDsXWBk3hA77G1R5XFltYQ0EqlfYj5XW2iYjxf3l4tdco06thrWXGiW+cFHXQrO7QxF/CydRcHQsPA4LxPFc=AxoKpPD1F1bEPz/O283eHkOiYG/7DFLZbOozFFbZbH/BwaKjcF7Sn1r/psVBEWv9MP69pCFgqGiScCq/406p8WDwrXDtjP7hDaYUP4updgT0HrO/Y0god6QnKGD8DqhqYsqGDwYtP9Yt4oPQhAZDYqbPD=DzhYE26QPARiDKo6BGGzaoXn6dKPemrM2PKZYfAQ/DiN7PE2vV0DbiDGQmVepx7GUBhxPT2B5/1ufDRN4d8/hM7E6emvnuNtDwRjdi4blREb4wGq10qgl5dicH8eQnexD;SERVERID=0a3251b1bff13a18b856bcf1852f8829|1740834371|1740834361;SERVERCORSID=0a3251b1bff13a18b856bcf1852f8829|1740834371|1740834361;tfstk=gPzmGd62kooXVyepH8ufvlDQWTIRGIgsxRLtBVHN4Yk7kRIjBu0aTJmtbiZYEIauKFLAhiNwSV3Np9QdJSNo5VWp4f9awKGjiF7tQn-rlfUww0dFJSNXauNajS_pIvg355kaQmor4jHrgno4Q4RrMY8q_ElwU_csUVlq0m-zafh6gfkaQ75o1YkZ7Vl09Fk37zaPUrRE4Yhm4zcmmvPlAF8MojJKpSkJ7FkmimqYgYYw7zqRLJ-s3MO-CqHbZj21REgqjlzxzrWP72rQEPmE-GCj05quCqUP_nkUD-3zukAw77000caZxKXoLrNzR4oR86VzP-Fbr5dN7beKUSaqSw5IoqkqrbaOFEkg4lzxcV9VIAauarrG4RtyYw1y53D94hts0bGopKGwPsvDzz35Z_xCcmlSM9ClZhOq0bGIJ_fkYeoqNjel.;isg=BPz8BdNVt0zUyoPuxsZIFaJNzZqu9aAfdEJYtdZ9jOfKoZ4r_gYOroLXhcnZ6dh3`,
+      "cookie": `_gcl_au=1.1.828597960.1740456102;cna=qS5EIEcjlH0BASQOBGAZfs5p;acw_tc=13b5be1680f7cde2106f40ee928d097af327aba086a9228880897a73ecb3aafb;token=${authToken};xlly_s=1;ssxmod_itna=mqUxRDBDnD00I4eKYIxAK0QD2W3nDAQDRDl4Bti=GgexFqAPqDHIa3vY8i0W0DjObNem07GneDl=24oDSxD6HDK4GTmzgh2rse77ObPpKYQ7R2xK7Amx4cTilPo+gY=GEUPn3rMI6FwDCPDExGkPrmrDeeaDCeDQxirDD4DADibe4D1GDDkD0+m7UovW4GWDm+mDWPDYxDrbRYDRPxD0ZmGDQI3aRDDBgGqob0CESfGR4bUO+hLGooD9E4DsO2nQYO6Wk=qGS8uG13bQ40kmq0OC4bAeILQa38vvb4ecEDoV=mxYamN10DOK0ZIGNjGN0DK02kt+4j0xRG4lhrQwFfYoDDWmAq8es8mGmACAT1ju1m7YTi=eDofhpY847DtKYxIO+gG=lDqeDpFidgOD/MhKhx4D;ssxmod_itna2=mqUxRDBDnD00I4eKYIxAK0QD2W3nDAQDRDl4Bti=GgexFqAPqDHIa3vY8i0W0DjObNem07GeDAYg25EoK0Gx03K+UeDsXWBk3hA77G1R5XFltYQ0EqlfYj5XW2iYjxf3l4tdco06thrWXGiW+cFHXQrO7QxF/CydRcHQsPA4LxPFc=AxoKpPD1F1bEPz/O283eHkOiYG/7DFLZbOozFFbZbH/BwaKjcF7Sn1r/psVBEWv9MP69pCFgqGiScCq/406p8WDwrXDtjP7hDaYUP4updgT0HrO/Y0god6QnKGD8DqhqYsqGDwYtP9Yt4oPQhAZDYqbPD=DzhYE26QPARiDKo6BGGzaoXn6dKPemrM2PKZYfAQ/DiN7PE2vV0DbiDGQmVepx7GUBhxPT2B5/1ufDRN4d8/hM7E6emvnuNtDwRjdi4blREb4wGq10qgl5dicH8eQnexD;SERVERID=0a3251b1bff13a18b856bcf1852f8829|1740834371|1740834361;SERVERCORSID=0a3251b1bff13a18b856bcf1852f8829|1740834371|1740834361;tfstk=gPzmGd62kooXVyepH8ufvlDQWTIRGIgsxRLtBVHN4Yk7kRIjBu0aTJmtbiZYEIauKFLAhiNwSV3Np9QdJSNo5VWp4f9awKGjiF7tQn-rlfUww0dFJSNXauNajS_pIvg355kaQmor4jHrgno4Q4RrMY8q_ElwU_csUVlq0m-zafh6gfkaQ75o1YkZ7Vl09Fk37zaPUrRE4Yhm4zcmmvPlAF8MojJKpSkJ7FkmimqYgYYw7zqRLJ-s3MO-CqHbZj21REgqjlzxzrWP72rQEPmE-GCj05quCqUP_nkUD-3zukAw77000caZxKXoLrNzR4oR86VzP-Fbr5dN7beKUSaqSw5IoqkqrbaOFEkg4lzxcV9VIAauarrG4RtyYw1y53D94hts0bGopKGwPsvDzz35Z_xCcmlSM9ClZhOq0bGIJ_fkYeoqNjel.;isg=BPz8BdNVt0zUyoPuxsZIFaJNzZqu9aAfdEJYtdZ9jOfKoZ4r_gYOroLXhcnZ6dh3`
     }
 
     return headers
