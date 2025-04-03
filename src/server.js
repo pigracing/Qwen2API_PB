@@ -8,14 +8,14 @@ const modelsRouter = require('./router/models.js')
 const chatRouter = require('./router/chat.js')
 const imagesRouter = require('./router/images.js')
 const verifyRouter = require('./router/verify.js')
-
+const infoRouter = require('./router/info.js')
 app.use(bodyParser.json({ limit: '128mb' }))
 app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }))
 app.use(modelsRouter)
 app.use(chatRouter)
 app.use(imagesRouter)
 app.use(verifyRouter)
-
+app.use(infoRouter)
 const startInfo = `
 -------------------------------------------------------------------
 监听地址：${process.env.LISTEN_ADDRESS ? process.env.LISTEN_ADDRESS : 'localhost'}

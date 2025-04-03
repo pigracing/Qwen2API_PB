@@ -6,7 +6,20 @@ const { JwtDecode } = require('./tools')
 
 class Account {
   constructor(accountTokens) {
-    this.accountTokens = []
+    this.accountTokensPath = path.join(__dirname, '../../data/accountTokens.json')
+    
+    if (!fs.existsSync(this.accountTokensPath)) {
+      fs.writeFileSync(this.accountTokensPath, JSON.stringify([], null, 2))
+    }
+
+    this.accountTokens = new Proxy(JSON.parse(fs.readFileSync(this.accountTokensPath, 'utf-8')), {
+      set: (target, prop, value) => {
+        target[prop] = value
+        fs.writeFileSync(this.accountTokensPath, JSON.stringify(this.accountTokens, null, 2))
+        return true
+      }
+    })
+
     this.init(accountTokens)
     this.currentIndex = 0
     this.models = [
@@ -47,53 +60,50 @@ class Account {
   }
 
   init(accountTokens) {
-    const accountTokensPath = path.join(__dirname, '../../data/accountTokens.json')
-    const proxyHandler = {
-      set: (target, prop, value) => {
-        target[prop] = value
-        fs.writeFileSync(accountTokensPath, JSON.stringify(this.accountTokens, null, 2))
-        return true
-      }
-    }
+    const accountTokensArray = accountTokens.split(',')
+    accountTokensArray.forEach(async (token) => {
+      if (token.includes(';')) {
+        const account = token.split(';')
+        const username = account[0]
+        const password = account[1]
 
-    this.accountTokens = new Proxy(this.accountTokens, proxyHandler)
+        if (this.accountTokens.find(item => item.username === username)) {
+          return
+        }
 
-
-    if (fs.existsSync(accountTokensPath)) {
-      this.accountTokens = JSON.parse(fs.readFileSync(accountTokensPath, 'utf-8'))
-    } else {
-      const accountTokensArray = accountTokens.split(',')
-      accountTokensArray.forEach(async (token) => {
-        if (token.includes(';')) {
-          const account = token.split(';')
-          const username = account[0]
-          const password = account[1]
-          const accountToken = await this.login(username, password)
-          if (accountToken) {
-            const decoded = JwtDecode(accountToken)
-            this.accountTokens.push({
-              type: 'username_password',
-              username: username,
-              password: password,
-              token: accountToken,
-              requestNumber: 0,
-              expiresAt: decoded.exp
-            })
-          }
-        } else {
-          const decoded = JwtDecode(token)
+        const accountToken = await this.login(username, password)
+        if (accountToken) {
+          const decoded = JwtDecode(accountToken)
+          // console.log(decoded)
           this.accountTokens.push({
-            type: 'token',
-            username: null,
-            password: null,
-            token: token,
+            type: 'username_password',
+            id: decoded.id,
+            username: username,
+            password: password,
+            token: accountToken,
             requestNumber: 0,
             expiresAt: decoded.exp
           })
         }
+      } else {
 
-      })
-    }
+        if (this.accountTokens.find(item => item.token === token)) {
+          return
+        }
+
+        const decoded = JwtDecode(token)
+        this.accountTokens.push({
+          type: 'token',
+          id: decoded.id,
+          username: '未设置',
+          password: '未设置',
+          token: token,
+          requestNumber: 0,
+          expiresAt: decoded.exp
+        })
+      }
+
+    })
 
   }
 
