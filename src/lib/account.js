@@ -4,22 +4,36 @@ const fs = require('fs')
 const path = require('path')
 const { JwtDecode } = require('./tools')
 
+// 定义账户类型枚举
+const AccountType = {
+  UserName: 'username_password',  // 简化名称，但保持值不变
+  Token: 'token'
+}
+
 class Account {
   constructor(accountTokens) {
     this.accountTokensPath = path.join(__dirname, '../../data/accountTokens.json')
+    this.dataDir = path.dirname(this.accountTokensPath)
     
-    if (!fs.existsSync(this.accountTokensPath)) {
-      fs.writeFileSync(this.accountTokensPath, JSON.stringify([], null, 2))
-    }
-
-    this.accountTokens = new Proxy(JSON.parse(fs.readFileSync(this.accountTokensPath, 'utf-8')), {
-      set: (target, prop, value) => {
-        target[prop] = value
-        fs.writeFileSync(this.accountTokensPath, JSON.stringify(this.accountTokens, null, 2))
-        return true
+    // 确保数据目录存在
+    if (!fs.existsSync(this.dataDir)) {
+      try {
+        fs.mkdirSync(this.dataDir, { recursive: true })
+      } catch (error) {
+        console.error('创建数据目录失败:', error)
+        process.exit(1)
       }
-    })
-
+    }
+    
+    // 加载账户信息
+    this.loadAccountTokens()
+    
+    // 设置定期保存
+    this.saveInterval = setInterval(() => this.saveAccountTokens(), 60000) // 每分钟保存一次
+    
+    // 设置定期刷新令牌 (每6小时刷新一次)
+    this.refreshInterval = setInterval(() => this.autoRefreshTokens(), 6 * 60 * 60 * 1000)
+    
     this.init(accountTokens)
     this.currentIndex = 0
     this.models = [
@@ -59,7 +73,189 @@ class Account {
     }
   }
 
+  loadAccountTokens() {
+    try {
+      if (!fs.existsSync(this.accountTokensPath)) {
+        this.accountTokens = []
+        this.saveAccountTokens()
+      } else {
+        const data = fs.readFileSync(this.accountTokensPath, 'utf-8')
+        try {
+          this.accountTokens = JSON.parse(data)
+          // 验证数据格式
+          if (!Array.isArray(this.accountTokens)) {
+            console.error('账户数据格式错误，重置为空数组')
+            this.accountTokens = []
+          }
+        } catch (jsonError) {
+          console.error('解析账户数据失败，创建备份并重置:', jsonError)
+          // 创建备份
+          const backupPath = `${this.accountTokensPath}.bak.${Date.now()}`
+          fs.copyFileSync(this.accountTokensPath, backupPath)
+          this.accountTokens = []
+        }
+      }
+    } catch (error) {
+      console.error('加载账户数据失败:', error)
+      this.accountTokens = []
+    }
+    
+    // 添加自定义方法到数组
+    this.accountTokens = this.extendTokensArray(this.accountTokens)
+  }
+  
+  extendTokensArray(array) {
+    // 创建代理来拦截修改操作，实现自动保存
+    return new Proxy(array, {
+      set: (target, prop, value) => {
+        target[prop] = value
+        this.saveAccountTokens()
+        return true
+      },
+      deleteProperty: (target, prop) => {
+        delete target[prop]
+        this.saveAccountTokens()
+        return true
+      }
+    })
+  }
+  
+  saveAccountTokens() {
+    try {
+      fs.writeFileSync(this.accountTokensPath, JSON.stringify(this.accountTokens, null, 2))
+    } catch (error) {
+      console.error('保存账户数据失败:', error)
+    }
+  }
+  
+  // 添加一个方法来清理过期的令牌
+  cleanExpiredTokens() {
+    const now = Math.floor(Date.now() / 1000)
+    const validTokens = this.accountTokens.filter(token => {
+      const isValid = token.expiresAt > now
+      if (!isValid) {
+        console.log(`令牌已过期: ${token.username || token.id}`)
+      }
+      return isValid
+    })
+    
+    if (validTokens.length !== this.accountTokens.length) {
+      this.accountTokens.length = 0 // 清空原数组
+      validTokens.forEach(token => this.accountTokens.push(token)) // 添加有效令牌
+    }
+  }
+  
+  // 添加自动刷新令牌的方法
+  async autoRefreshTokens() {
+    console.log('开始自动刷新令牌...')
+    
+    // 找出即将过期的令牌 (24小时内过期)
+    const now = Math.floor(Date.now() / 1000)
+    const expirationThreshold = now + 24 * 60 * 60
+    
+    const needsRefresh = this.accountTokens.filter(token => 
+      token.type === AccountType.UserName && token.expiresAt < expirationThreshold
+    )
+    
+    if (needsRefresh.length === 0) {
+      console.log('没有需要刷新的令牌')
+      return 0
+    }
+    
+    console.log(`发现 ${needsRefresh.length} 个令牌需要刷新`)
+    let refreshedCount = 0
+    for (let i = 0; i < this.accountTokens.length; i++) {
+      const token = this.accountTokens[i]
+      // 只刷新类型为username_password且即将过期的令牌
+      if (token.type === AccountType.UserName && token.expiresAt < expirationThreshold) {
+        const refreshed = await this.refreshSingleToken(token)
+        if (refreshed) refreshedCount++
+      }
+    }
+    
+    console.log(`成功刷新了 ${refreshedCount} 个令牌`)
+    return refreshedCount
+  }
+
+  // 添加检查令牌是否即将过期的方法
+  isTokenExpiringSoon(token, thresholdHours = 6) {
+    const now = Math.floor(Date.now() / 1000)
+    const thresholdSeconds = thresholdHours * 60 * 60
+    return token.expiresAt - now < thresholdSeconds
+  }
+
+  // 修改getAccountToken方法，处理即将过期的令牌
+  getAccountToken() {
+    this.cleanExpiredTokens() // 每次获取前清理过期令牌
+    
+    if (this.accountTokens.length === 0) {
+      console.error('没有可用的账户令牌')
+      return null
+    }
+    
+    if (this.currentIndex >= this.accountTokens.length) {
+      this.currentIndex = 0
+    }
+    
+    const token = this.accountTokens[this.currentIndex]
+    this.currentIndex++
+    
+    // 检查令牌是否即将过期
+    if (token.type === AccountType.UserName && this.isTokenExpiringSoon(token)) {
+      console.log(`令牌即将过期，尝试刷新: ${token.username}`)
+      // 异步刷新令牌，不阻塞当前请求
+      this.refreshSingleToken(token).catch(err => 
+        console.error(`刷新令牌失败 (${token.username}):`, err.message)
+      )
+    }
+    
+    // 更新请求计数
+    token.requestNumber = (token.requestNumber || 0) + 1
+    token.lastUsed = new Date().toISOString()
+    
+    if (token.token) {
+      return token.token
+    } else {
+      // 尝试下一个令牌
+      return this.getAccountToken()
+    }
+  }
+
+  // 刷新单个令牌的方法
+  async refreshSingleToken(token) {
+    if (token.type !== AccountType.UserName) {
+      return false
+    }
+    
+    try {
+      const newToken = await this.login(token.username, token.password)
+      if (newToken) {
+        const decoded = JwtDecode(newToken)
+        const now = Math.floor(Date.now() / 1000)
+        
+        // 找到并更新令牌
+        const index = this.accountTokens.findIndex(t => t.username === token.username)
+        if (index !== -1) {
+          this.accountTokens[index] = {
+            ...token,
+            token: newToken,
+            expiresAt: decoded.exp,
+            lastRefreshed: new Date().toISOString()
+          }
+          console.log(`刷新令牌成功: ${token.username} (还有${Math.round((decoded.exp - now) / 3600)}小时过期)`)
+          return true
+        }
+      }
+    } catch (error) {
+      console.error(`刷新令牌失败 (${token.username}):`, error.message)
+    }
+    
+    return false
+  }
+
   init(accountTokens) {
+    if (!accountTokens) return
+    
     const accountTokensArray = accountTokens.split(',')
     accountTokensArray.forEach(async (token) => {
       if (token.includes(';')) {
@@ -67,57 +263,88 @@ class Account {
         const username = account[0]
         const password = account[1]
 
-        if (this.accountTokens.find(item => item.username === username)) {
-          return
+        // 检查是否已存在该用户的有效令牌
+        const existingAccount = this.accountTokens.find(item => item.username === username)
+        if (existingAccount) {
+          // 检查令牌是否过期
+          const now = Math.floor(Date.now() / 1000)
+          if (existingAccount.expiresAt > now) {
+            console.log(`${username} 令牌有效，跳过登录`)
+            return
+          }
+          console.log(`${username} 令牌已过期，重新登录`)
         }
 
         const accountToken = await this.login(username, password)
         if (accountToken) {
           const decoded = JwtDecode(accountToken)
-          // console.log(decoded)
+          
+          // 如果用户已存在，更新令牌信息
+          if (existingAccount) {
+            const index = this.accountTokens.findIndex(item => item.username === username)
+            if (index !== -1) {
+              this.accountTokens[index] = {
+                ...existingAccount,
+                token: accountToken,
+                expiresAt: decoded.exp,
+                lastRefreshed: new Date().toISOString()
+              }
+              return
+            }
+          }
+          
+          // 添加新用户
           this.accountTokens.push({
-            type: 'username_password',
+            type: AccountType.UserName,
             id: decoded.id,
             username: username,
             password: password,
             token: accountToken,
             requestNumber: 0,
-            expiresAt: decoded.exp
+            expiresAt: decoded.exp,
+            addedAt: new Date().toISOString()
           })
         }
       } else {
-
+        // 处理直接提供的token
+        // 检查是否已存在该token
         if (this.accountTokens.find(item => item.token === token)) {
           return
         }
 
-        const decoded = JwtDecode(token)
-        this.accountTokens.push({
-          type: 'token',
-          id: decoded.id,
-          username: '未设置',
-          password: '未设置',
-          token: token,
-          requestNumber: 0,
-          expiresAt: decoded.exp
-        })
+        try {
+          const decoded = JwtDecode(token)
+          // 检查令牌是否已过期
+          const now = Math.floor(Date.now() / 1000)
+          if (decoded.exp <= now) {
+            console.log(`令牌已过期: ${decoded.id || token.substring(0, 10)}...`)
+            return
+          }
+          
+          this.accountTokens.push({
+            type: AccountType.Token,
+            id: decoded.id,
+            username: '未设置',
+            password: '未设置',
+            token: token,
+            requestNumber: 0,
+            expiresAt: decoded.exp,
+            addedAt: new Date().toISOString()
+          })
+        } catch (error) {
+          console.error('无效令牌:', token.substring(0, 10) + '...')
+        }
       }
-
     })
-
   }
-
-  getAccountToken() {
-    if (this.currentIndex >= this.accountTokens.length) {
-      this.currentIndex = 0
+  
+  // 更新销毁方法，清除定时器
+  destroy() {
+    if (this.saveInterval) {
+      clearInterval(this.saveInterval)
     }
-    const token = this.accountTokens[this.currentIndex]
-    this.currentIndex++
-    this.requestNumber++
-    if (token.token) {
-      return token.token
-    } else {
-      return this.getAccountToken()
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval)
     }
   }
 
@@ -137,8 +364,9 @@ class Account {
       }, {
         headers: this.getHeaders(token)
       })
-      return true
+      return response.status === 200
     } catch (error) {
+      console.error('验证令牌失败:', error.message)
       return false
     }
   }
@@ -226,15 +454,20 @@ class Account {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0"
         }
       })
-      console.log(username, "登录成功")
-      return response.data.token
+      
+      if (response.data && response.data.token) {
+        console.log(`${username} 登录成功`)
+        return response.data.token
+      } else {
+        console.error(`${username} 登录响应缺少令牌`)
+        return false
+      }
     } catch (e) {
+      console.error(`${username} 登录失败:`, e.message)
       return false
     }
   }
-
 }
-
 
 if ((!process.env.ACCOUNT_TOKENS && process.env.API_KEY) || (process.env.ACCOUNT_TOKENS && !process.env.API_KEY)) {
   console.log('如果需要使用多账户，请设置ACCOUNT_TOKENS和API_KEY')
@@ -246,6 +479,23 @@ let accountManager = null
 
 if (accountTokens) {
   accountManager = new Account(accountTokens)
+  
+  // 添加进程退出时的清理
+  process.on('exit', () => {
+    if (accountManager) {
+      accountManager.destroy()
+    }
+  })
+  
+  // 处理意外退出
+  process.on('SIGINT', () => {
+    console.log('正在保存账户数据...')
+    if (accountManager) {
+      accountManager.saveAccountTokens()
+      accountManager.destroy()
+    }
+    process.exit(0)
+  })
 }
 
 module.exports = accountManager
