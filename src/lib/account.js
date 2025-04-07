@@ -9,7 +9,7 @@ class Account {
 
     this.accountTokens = []
 
-    if (!process.env.RUN_MODE === "hf") {
+    if (process.env.RUN_MODE !== "hf") {
       this.accountTokensPath = path.join(__dirname, '../../data/accountTokens.json')
       this.dataDir = path.dirname(this.accountTokensPath)
       // 确保数据目录存在
@@ -151,7 +151,7 @@ class Account {
     const expirationThreshold = now + 24 * 60 * 60
 
     const needsRefresh = this.accountTokens.filter(token =>
-      token.type === AccountType.UserName && token.expiresAt < expirationThreshold
+      token.type === "username_password" && token.expiresAt < expirationThreshold
     )
 
     if (needsRefresh.length === 0) {
@@ -161,13 +161,10 @@ class Account {
 
     console.log(`发现 ${needsRefresh.length} 个令牌需要刷新`)
     let refreshedCount = 0
-    for (let i = 0; i < this.accountTokens.length; i++) {
-      const token = this.accountTokens[i]
+    for (const token of needsRefresh) {
       // 只刷新类型为username_password且即将过期的令牌
-      if (token.type === AccountType.UserName && token.expiresAt < expirationThreshold) {
-        const refreshed = await this.refreshSingleToken(token)
-        if (refreshed) refreshedCount++
-      }
+      const refreshed = await this.refreshSingleToken(token)
+      if (refreshed) refreshedCount++
     }
 
     console.log(`成功刷新了 ${refreshedCount} 个令牌`)
@@ -220,7 +217,7 @@ class Account {
 
   // 刷新单个令牌的方法
   async refreshSingleToken(token) {
-    if (token.type !== AccountType.UserName) {
+    if (token.type !== "username_password") {
       return false
     }
 
@@ -361,7 +358,7 @@ class Account {
       }, {
         headers: this.getHeaders(token)
       })
-      return response.status === 200
+      return true
     } catch (error) {
       console.error('验证令牌失败:', error.message)
       return false
