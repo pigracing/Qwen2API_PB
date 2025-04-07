@@ -16,6 +16,7 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
     ACCOUNT_TOKENS=
     SEARCH_INFO_MODE=table
     OUTPUT_THINK=true
+    RUN_MODE=docker
 ```
 
 ---
@@ -47,7 +48,10 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
     > 是否输出思考过程，可选 true 或 false
 
     > 示例：true
-  >
+- RUN_MODE: 运行模式
+    > 运行模式，可选 hf 或 docker
+
+    > 示例：docker
 ---
 
 ## 安装与运行
@@ -66,7 +70,7 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
 1. 使用 Docker 命令：
 
    ```bash
-   docker run -d -p 3000:3000 -e API_KEY=sk-123456 -e ACCOUNT_TOKENS=ey1...,ey2...,ey3... --name qwen2api rfym21/qwen2api:latest
+   docker run -d -p 3000:3000 -e API_KEY=sk-123456 -e ACCOUNT_TOKENS=ey1...,ey2...,ey3... -e RUN_MODE=docker --name qwen2api rfym21/qwen2api:latest
    ```
 
 2. 使用 docker-compose 运行服务：
@@ -103,6 +107,7 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
    ACCOUNT_TOKENS=ey1...,ey2...,ey3...
    SEARCH_INFO_MODE=table
    OUTPUT_THINK=true
+   RUN_MODE=docker
    ```
 
 4. 启动服务：

@@ -28,3 +28,6 @@ services:
       - SEARCH_INFO_MODE=table
       # 是否输出思考过程
       - OUTPUT_THINK=true
+      # 运行模式
+      - RUN_MODE=docker
+
