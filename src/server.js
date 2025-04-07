@@ -28,7 +28,7 @@ if (process.env.LISTEN_ADDRESS) {
     console.log(startInfo)
   })
 } else {
-  app.listen(process.env.SERVICE_PORT || 3000, () => {
+  app.listen(process.env.SERVICE_PORT || 3000, "localhost",() => {
     console.log(startInfo)
   })
 }
