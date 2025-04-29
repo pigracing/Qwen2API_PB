@@ -39,7 +39,7 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
     > 是否输出思考过程，可选 true 或 false
 
     > 示例：true
-- REDIS_URL: 运行模式
+- REDIS_URL: redis链接
     > redis地址，必填（可在Upstash免费创建一个）
     ![upstash](./docs/images/upstash.png)
 

@@ -48,7 +48,8 @@ const startInfo = `
 接口路径：${config.apiPrefix ? config.apiPrefix : '未设置'}
 思考输出：${config.outThink ? '开启' : '关闭'}
 搜索显示：${config.searchInfoMode === 'table' ? '表格' : '文本'}
-开源地址：https://github.com/qwen2/Qwen2API
+开源地址：https://github.com/Rfym21/Qwen2API
+Tips：在 2025.04.29.17.00 之后的版本，将不再支持将账号写入环境变量，请在运行成功后打开管理页面添加账号！！！
 -------------------------------------------------------------------
 `
 if (config.listenAddress) {
