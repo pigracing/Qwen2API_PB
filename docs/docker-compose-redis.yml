@@ -24,4 +24,16 @@ services:
       # 是否输出思考过程
       - OUTPUT_THINK=true
       # redis 连接地址(必填)
-      - REDIS_URL=
+      - REDIS_URL=redis://redis:6379
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis_qwen2api
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  redis-data:
+
