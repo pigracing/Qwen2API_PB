@@ -1,12 +1,17 @@
 const Redis = require('ioredis')
 const config = require('../config.js')
 
+// 判断是否需要TLS
+const isTLS = config.redisURL && (config.redisURL.startsWith('rediss://') || config.redisURL.includes('--tls'))
+
 // 创建单个Redis连接实例
 const redis = new Redis(config.redisURL, {
-  // TLS配置
-  tls: {
-    rejectUnauthorized: true
-  },
+  // TLS配置 - 只在需要时启用
+  ...(isTLS ? {
+    tls: {
+      rejectUnauthorized: true
+    }
+  } : {}),
 
   // 重试策略优化
   retryStrategy(times) {
@@ -48,7 +53,6 @@ const redis = new Redis(config.redisURL, {
   // 连接池配置
   connectionName: 'qwen2api_client',
   db: 0,
-  password: "password",
   lazyConnect: true
 })
 
