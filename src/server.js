@@ -1,8 +1,7 @@
 const express = require('express')
 const bodyParser = require('body-parser')
+const config = require('./config.js')
 const app = express()
-const dotenv = require('dotenv')
-dotenv.config()
 
 const modelsRouter = require('./router/models.js')
 const chatRouter = require('./router/chat.js')
@@ -19,16 +18,16 @@ app.use(infoRouter)
 const startInfo = `
 -------------------------------------------------------------------
 监听地址：${process.env.LISTEN_ADDRESS ? process.env.LISTEN_ADDRESS : 'localhost'}
-服务端口：${process.env.SERVICE_PORT}
-API路径：${process.env.API_PREFIX ? process.env.API_PREFIX : '未设置'}
+服务端口：${config.listenPort}
+API路径：${config.apiPrefix ? config.apiPrefix : '未设置'}
 -------------------------------------------------------------------
 `
-if (process.env.LISTEN_ADDRESS) {
-  app.listen(process.env.SERVICE_PORT || 3000, process.env.LISTEN_ADDRESS, () => {
+if (config.listenAddress) {
+  app.listen(config.listenPort, config.listenAddress, () => {
     console.log(startInfo)
   })
 } else {
-  app.listen(process.env.SERVICE_PORT || 3000,() => {
+  app.listen(config.listenPort, () => {
     console.log(startInfo)
   })
 }

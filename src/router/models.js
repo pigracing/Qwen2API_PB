@@ -1,18 +1,19 @@
 const express = require('express')
 const router = express.Router()
 const accountManager = require('../lib/account.js')
+const config = require('../config.js')
 
-router.get(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/models`, async (req, res) => {
+router.get(`${config.apiPrefix ? config.apiPrefix : ''}/v1/models`, async (req, res) => {
   try {
     let authToken = req.headers.authorization
 
     if (authToken) {
       // 如果提供了 Authorization header，验证是否与 API_KEY 匹配
-      if (authToken === `Bearer ${process.env.API_KEY}`) {
+      if (authToken === `Bearer ${config.apiKey}`) {
         authToken = accountManager.getAccountToken()
       }
     } else if (accountManager) {
-      // 如果没有 Authorization header 且有账户管理，使用账户 token
+      // 如果没有 Authorization  且有账户管理，使用账户 token
       authToken = accountManager.getAccountToken()
     } else {
       res.json(await accountManager.getModelList())

@@ -6,8 +6,9 @@ const { isJson } = require('../lib/tools.js')
 const { sendChatRequest } = require('../lib/request.js')
 const accountManager = require('../lib/account.js')
 const { createImageRequest, awaitImage } = require('../lib/image.js')
+const config = require('../config.js')
 
-router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/completions`, async (req, res) => {
+router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, async (req, res) => {
 
   // 身份验证
   let authToken = req.headers.authorization
@@ -20,7 +21,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/chat/com
       })
   }
 
-  if (authToken === `Bearer ${process.env.API_KEY}` && accountManager) {
+  if (authToken === `Bearer ${config.apiKey}` && accountManager) {
     authToken = accountManager.getAccountToken()
   } else if (authToken) {
     authToken = authToken.replace('Bearer ', '')

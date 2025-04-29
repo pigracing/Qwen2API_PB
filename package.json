@@ -1,6 +1,6 @@
 {
   "name": "qwen2api",
-  "version": "2025.03.01.22.30",
+  "version": "2025.04.29.22.30",
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
@@ -17,6 +17,7 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "form-data": "^4.0.2",
+    "ioredis": "^5.6.1",
     "jwt-decode": "^4.0.0",
     "nodemon": "^3.1.7",
     "postcss": "^8.5.3",

@@ -1,5 +1,6 @@
 const router = require('express').Router()
-const accountManager = require('../lib/account')
+const accountManager = require('../lib/account.js')
+const config = require('../config.js')
 
 router.get('/info/getTokens', (req, res) => {
   const tokens = accountManager.accountTokens

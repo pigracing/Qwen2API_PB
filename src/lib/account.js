@@ -26,7 +26,7 @@ class Account {
       this.loadAccountTokens()
 
       // 设置定期保存
-      this.saveInterval = setInterval(() => this.saveAccountTokens(), 60000) // 每分钟保存一次
+      this.saveInterval = setInterval(() => this.saveAccountTokens(), 60000)
     }
 
     // 设置定期刷新令牌 (每6小时刷新一次)
@@ -44,7 +44,10 @@ class Account {
       "qwen2.5-72b-instruct",
       "qwen2.5-coder-32b-instruct",
       "qwen2.5-14b-instruct-1m",
-      "qwen2.5-vl-32b-instruct"
+      "qwen2.5-vl-32b-instruct",
+      "qwen3-235b-a22b",
+      "qwen3-30b-a3b",
+      "qwen3-32b"
     ]
 
     this.defaultHeaders = {

@@ -1,9 +1,10 @@
 const express = require('express')
 const router = express.Router()
+const config = require('../config.js')
 
 router.post('/verify', (req, res) => {
   const apiKey = req.body.apiKey
-  if (!apiKey || apiKey != process.env.API_KEY) {
+  if (!apiKey || apiKey != config.apiKey) {
     return res.status(401).json({
       status: 401,
       message: 'Unauthorized'

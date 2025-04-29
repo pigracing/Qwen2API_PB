@@ -2,8 +2,9 @@ const express = require('express')
 const router = express.Router()
 const { createImageRequest, awaitImage } = require('../lib/image.js')
 const accountManager = require('../lib/account.js')
+const config = require('../config.js')
 
-router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/images/generations`, async(req, res) => {
+router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/images/generations`, async(req, res) => {
   const { model, prompt, n, size } = req.body
   let authToken = req.headers.authorization
 
@@ -14,7 +15,7 @@ router.post(`${process.env.API_PREFIX ? process.env.API_PREFIX : ''}/v1/images/g
       })
   }
 
-  if (authToken === `Bearer ${process.env.API_KEY}` && accountManager) {
+  if (authToken === `Bearer ${config.apiKey}` && accountManager) {
     authToken = accountManager.getAccountToken()
   } else {
     authToken = authToken.replace('Bearer ', '')
