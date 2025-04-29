@@ -2,6 +2,8 @@ const axios = require('axios')
 const { sha256Encrypt } = require('./tools')
 const { JwtDecode } = require('./tools')
 const config = require('../config.js')
+const { getDefaultHeaders, getDefaultCookie } = require('./setting')
+const redisClient = require('./redis')
 
 
 class Account {
@@ -35,9 +37,14 @@ class Account {
     this.defaultHeaders = config.defaultHeaders
   }
 
-  loadAccountTokens() {
+  async loadAccountTokens() {
     try {
-
+      const accountTokens = await redisClient.getAllAccounts()
+      if (accountTokens.length > 0) {
+        this.accountTokens = accountTokens
+      } else {
+        this.accountTokens = []
+      }
     } catch (error) {
       console.error('加载账户数据失败:', error)
       this.accountTokens = []
@@ -214,6 +221,10 @@ class Account {
     return this.models
   }
 
+  getAllAccountKeys() {
+    return this.accountTokens
+  }
+
   getHeaders(authToken) {
     const headers = {
       ...this.defaultHeaders,
@@ -228,10 +239,10 @@ class Account {
     return `token=${authToken}; ${config.defaultCookie}`
   }
 
-  async login(username, password) {
+  async login(email, password) {
     try {
       const response = await axios.post('https://chat.qwen.ai/api/v1/auths/signin', {
-        email: username,
+        email: email,
         password: sha256Encrypt(password)
       }, {
         headers: {
@@ -240,17 +251,27 @@ class Account {
       })
 
       if (response.data && response.data.token) {
-        console.log(`${username} 登录成功`)
+        console.log(`${email} 登录成功`)
         return response.data.token
       } else {
-        console.error(`${username} 登录响应缺少令牌`)
+        console.error(`${email} 登录响应缺少令牌`)
         return false
       }
     } catch (e) {
-      console.error(`${username} 登录失败:`, e.message)
+      console.error(`${email} 登录失败:`, e.message)
       return false
     }
   }
+
+  deleteAccount(email) {
+    const index = this.accountTokens.findIndex(t => t.email === email)
+    if (index !== -1) {
+      this.accountTokens.splice(index, 1)
+      return true
+    }
+    return false
+  }
+
 }
 
 if (!process.env.REDIS_URL && !process.env.API_KEY) {

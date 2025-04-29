@@ -2,7 +2,7 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const config = require('./config.js')
 const app = express()
-
+const { getDefaultHeaders, getDefaultCookie } = require('./lib/setting')
 const modelsRouter = require('./router/models.js')
 const chatRouter = require('./router/chat.js')
 const imagesRouter = require('./router/images.js')
@@ -20,8 +20,15 @@ app.use(chatRouter)
 app.use(imagesRouter)
 app.use(verifyRouter)
 app.use(infoRouter)
-app.use('/api/accounts', accountsRouter)
-app.use('/api/settings', settingsRouter)
+app.use('/api', accountsRouter)
+app.use('/api', settingsRouter)
+
+const initConfig = async () => {
+  config.defaultHeaders = await getDefaultHeaders()
+  config.defaultCookie = await getDefaultCookie()
+}
+
+initConfig()
 
 const startInfo = `
 -------------------------------------------------------------------
@@ -33,7 +40,6 @@ const startInfo = `
 开源地址：https://github.com/qwen2/Qwen2API
 -------------------------------------------------------------------
 `
-
 if (config.listenAddress) {
   app.listen(config.listenPort, config.listenAddress, () => {
     console.log(startInfo)
