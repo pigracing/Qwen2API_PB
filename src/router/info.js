@@ -8,12 +8,9 @@ router.get('/info/getTokens', (req, res) => {
     status: 200,
     data: tokens.map(token => {
       return {
-        id: token.id,
-        type: token.type,
         username: token.username,
         token: token.token.slice(0, Math.floor(token.token.length / 2)) + '...',
         expiresAt: new Date(token.expiresAt * 1000).toLocaleString(),
-        requestNumber: token.requestNumber,
       }
     })
   })
