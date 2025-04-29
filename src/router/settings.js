@@ -5,6 +5,18 @@ const config = require('../config')
 const { apiKeyVerify } = require('./index')
 
 
+router.get('/settings', apiKeyVerify, async (req, res) => {
+  res.json({
+    apiKey: config.apiKey,
+    defaultHeaders: config.defaultHeaders,
+    defaultCookie: config.defaultCookie,
+    autoRefresh: config.autoRefresh,
+    autoRefreshInterval: config.autoRefreshInterval,
+    outThink: config.outThink,
+    searchInfoMode: config.searchInfoMode
+  })
+})
+
 // 更新API Key
 router.post('/setApiKey', apiKeyVerify, async (req, res) => {
   try {

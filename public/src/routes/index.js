@@ -12,6 +12,11 @@ const routes = [
     path: '/auth',
     component: () => import('../views/auth.vue')
   },
+  {
+    name: 'settings',
+    path: '/settings',
+    component: () => import('../views/settings.vue')
+  }
 ]
 
 const router = createRouter({
@@ -32,7 +37,7 @@ router.beforeEach(async (to, from, next) => {
       next({ path: '/auth' })
     } else {
       try {
-        const verifyResponse = await axios.post('/api/verify', {
+        const verifyResponse = await axios.post('/verify', {
           apiKey: apiKey
         })
 

@@ -2,7 +2,6 @@ const axios = require('axios')
 const { sha256Encrypt } = require('./tools')
 const { JwtDecode } = require('./tools')
 const config = require('../config.js')
-const { getDefaultHeaders, getDefaultCookie } = require('./setting')
 const redisClient = require('./redis')
 
 
@@ -161,7 +160,7 @@ class Account {
       modelsList.push(item + '-thinking')
       modelsList.push(item + '-search')
       modelsList.push(item + '-thinking-search')
-      modelsList.push(item + '-draw')
+      // modelsList.push(item + '-draw')
     }
 
     const models = {

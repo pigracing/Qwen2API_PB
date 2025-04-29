@@ -7,7 +7,6 @@ const getDefaultHeaders = async () => {
     redisClient.set('defaultHeaders', JSON.stringify(config.defaultHeaders))
     return config.defaultHeaders
   }
-  console.log(headers)
   return JSON.parse(headers)
 }
 

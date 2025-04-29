@@ -7,28 +7,28 @@ const redis = new Redis(config.redisURL, {
   tls: {
     rejectUnauthorized: true
   },
-  
+
   // 重试策略优化
   retryStrategy(times) {
     const maxDelay = 5000 // 最大延迟5秒
     const minDelay = 100  // 最小延迟100ms
     const factor = 2      // 指数退避因子
-    
+
     let delay = Math.min(minDelay * Math.pow(factor, times), maxDelay)
-    console.log(`重试次数: ${times}, 延迟: ${delay}ms`)
+    console.log(`🔄 加载重试次数: ${times}, 延迟: ${delay}ms`)
     return delay
   },
-  
+
   // 连接配置
   maxRetriesPerRequest: 5,        // 每个请求的最大重试次数
   enableOfflineQueue: true,       // 离线时将命令加入队列
   connectTimeout: 15000,          // 连接超时时间
   disconnectTimeout: 3000,        // 断开连接超时时间
-  keepAlive: 30000,              // 保持连接的时间
+  keepAlive: 10 * 60 * 1000,      // 保持连接的时间
   noDelay: true,                 // 禁用Nagle算法
   autoResubscribe: true,         // 自动重新订阅
   autoResendUnfulfilledCommands: true,
-  
+
   // 错误重连策略
   reconnectOnError(err) {
     const targetErrors = ['READONLY', 'ETIMEDOUT', 'ECONNRESET']
@@ -37,18 +37,18 @@ const redis = new Redis(config.redisURL, {
     }
     return false
   },
-  
+
   // 集群和故障转移配置
   retryDelayOnFailover: 200,
   retryDelayOnClusterDown: 1000,
   retryDelayOnTryAgain: 200,
   slotsRefreshTimeout: 2000,
   maxLoadingRetryTime: 15000,
-  
+
   // 连接池配置
   connectionName: 'qwen2api_client',
   db: 0,
-  password: config.redisPassword,
+  password: "password",
   lazyConnect: true
 })
 
@@ -64,28 +64,28 @@ redis.on('ready', () => {
 redis.on('error', (err) => {
   console.error('❌ Redis 连接错误:', err)
   // 添加错误详细信息
-  console.error('错误堆栈:', err.stack)
+  console.error('❌ 错误堆栈:', err.stack)
 })
 
 redis.on('close', () => {
-  console.log('Redis 连接关闭')
+  console.log('❌ Redis 连接关闭')
 })
 
 redis.on('reconnecting', (delay) => {
-  console.log(`Redis 正在重新连接...延迟: ${delay}ms, 重试次数: ${redis.retryAttempts}`)
+  console.log(`🔄 Redis 正在重新连接...延迟: ${delay}ms, 重试次数: ${redis.retryAttempts}`)
 })
 
 redis.on('end', () => {
-  console.log('Redis 连接已终止')
+  console.log('❌ Redis 连接已终止')
 })
 
 // 添加新的监控事件
 redis.on('wait', () => {
-  console.log('等待可用连接...')
+  console.log('❌ 等待可用连接...')
 })
 
 redis.on('select', (dbIndex) => {
-  console.log(`已选择数据库 ${dbIndex}`)
+  console.log(`✅ 已选择数据库 ${dbIndex}`)
 })
 
 /**
@@ -105,7 +105,7 @@ redis.getAllAccounts = async function () {
     keys.forEach(key => {
       pipeline.hgetall(key)
     })
-    
+
     const results = await pipeline.exec()
     if (!results) {
       console.log('❌ 获取账户数据失败')
@@ -130,7 +130,7 @@ redis.getAllAccounts = async function () {
         expires: accountData.expires || ''
       }
     }).filter(Boolean) // 过滤掉null值
-    
+
     console.log('✅ 获取所有账户成功，共', accounts.length, '个账户')
     return accounts
   } catch (err) {

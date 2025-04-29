@@ -33,7 +33,7 @@ router.get(`${config.apiPrefix ? config.apiPrefix : ''}/v1/models`, async (req, 
       modelsList.push(item.id + '-thinking')
       modelsList.push(item.id + '-search')
       modelsList.push(item.id + '-thinking-search')
-      modelsList.push(item.id + '-draw')
+      // modelsList.push(item.id + '-draw')
     }
 
     const models = {
