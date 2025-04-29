@@ -33,7 +33,7 @@ router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, a
   }
   const stream = req.body.stream
 
-  console.log(`[${new Date().toLocaleString()}]: model: ${req.body.model} | stream: ${stream} | authToken: ${authToken.replace('Bearer ', '').slice(0, Math.floor(authToken.length / 2))}...`)
+  console.log(`[${new Date().toLocaleString()}]: model: ${req.body.model} | stream: ${stream} | authToken: ${authToken?.replace('Bearer ', '')}`)
 
 
   let file_url = null

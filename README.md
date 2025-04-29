@@ -8,7 +8,7 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
 
 ```plaintext
     API_PREFIX=
-    LISTEN_ADDRESS=0.0.0.0
+    LISTEN_ADDRESS=
     SERVICE_PORT=3000
     API_KEY=sk-123456
     ACCOUNT_TOKENS=
@@ -75,6 +75,7 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
 ### 复制 Hugging Face 空间
 
 - [Qwen2API](https://huggingface.co/spaces/devme/q2waepnilm)
+![hf](./docs/images/hf.png)
 
 ---
 

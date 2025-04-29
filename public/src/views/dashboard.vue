@@ -28,28 +28,28 @@
                   <span class="text-gray-700 min-w-[96px] text-left font-semibold">📧 Email:</span>
                   <span class="font-medium whitespace-nowrap text-left">{{ token.email }}</span>
                 </div>
-                <button @click="copyToClipboard(token.email)" class="absolute right-2 opacity-60 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
+                <button @click="copyToClipboard(token.email)" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
               </div>
               <div class="relative flex items-center bg-blue-50/80 rounded-lg px-2 py-1">
                 <div class="overflow-x-auto scrollbar-hide flex-1 flex items-center space-x-2">
                   <span class="text-gray-700 min-w-[96px] text-left font-semibold">🔑 Passwd:</span>
                   <span class="font-medium whitespace-nowrap text-left">{{ token.password }}</span>
                 </div>
-                <button @click="copyToClipboard(token.password)" class="absolute right-2 opacity-60 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
+                <button @click="copyToClipboard(token.password)" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
               </div>
               <div class="relative flex items-center bg-blue-50/80 rounded-lg px-2 py-1">
                 <div class="overflow-x-auto scrollbar-hide flex-1 flex items-center space-x-2">
                   <span class="text-gray-700 min-w-[96px] text-left font-semibold">🔐 Token:</span>
                   <span class="font-medium whitespace-nowrap text-left text-sm">{{ token.token }}</span>
                 </div>
-                <button @click="copyToClipboard(token.token)" class="absolute right-2 opacity-60 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
+                <button @click="copyToClipboard(token.token)" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
               </div>
               <div class="relative flex items-center bg-blue-50/80 rounded-lg px-2 py-1">
                 <div class="overflow-x-auto scrollbar-hide flex-1 flex items-center space-x-2">
                   <span class="text-gray-700 min-w-[96px] text-left font-semibold">⏰ Expire:</span>
                   <span class="font-medium whitespace-nowrap text-left">{{ new Date(token.expires * 1000).toLocaleString() }}</span>
                 </div>
-                <button @click="copyToClipboard(new Date(token.expires * 1000).toLocaleString())" class="absolute right-2 opacity-60 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
+                <button @click="copyToClipboard(new Date(token.expires * 1000).toLocaleString())" class="absolute right-2 opacity-0 hover:opacity-100 transition-opacity bg-blue-200 hover:bg-blue-300 rounded px-2 py-1 text-base">📋</button>
               </div>
             </div>
             
