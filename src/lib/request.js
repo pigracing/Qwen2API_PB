@@ -45,10 +45,11 @@ const sendChatRequest = async (model, messages, stream, authToken) => {
     body.model = body.model.replace('-search', '')
     body.chat_type = 'search'
   }
+
   if (accountManager) {
     const models = await accountManager.getModels()
     if (!models.includes(body.model)) {
-      body.model = 'qwq-32b'
+      body.model = 'qwen3-235b-a22b'
     }
   }
 

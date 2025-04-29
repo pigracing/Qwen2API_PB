@@ -5,7 +5,7 @@ const config = require('../config.js')
 
 
 class Account {
-  constructor(accountTokens) {
+  constructor() {
 
     this.accountTokens = []
 
@@ -15,7 +15,6 @@ class Account {
     // 设置定期刷新令牌 (每6小时刷新一次)
     this.refreshInterval = setInterval(() => config.autoRefresh && this.autoRefreshTokens(), config.autoRefreshInterval * 1000)
 
-    this.init(accountTokens)
     this.currentIndex = 0
     this.models = [
       "qwen3-235b-a22b",
@@ -259,26 +258,22 @@ if (!process.env.REDIS_URL && !process.env.API_KEY) {
   process.exit(1)
 }
 
-const accountTokens = process.env.ACCOUNT_TOKENS
-let accountManager = null
+const accountManager = new Account()
 
-if (accountTokens) {
-  accountManager = new Account(accountTokens)
+// 添加进程退出时的清理
+process.on('exit', () => {
+  if (accountManager) {
+    accountManager.destroy()
+  }
+})
 
-  // 添加进程退出时的清理
-  process.on('exit', () => {
-    if (accountManager) {
-      accountManager.destroy()
-    }
-  })
+// 处理意外退出
+process.on('SIGINT', () => {
+  if (accountManager) {
+    accountManager.destroy()
+  }
+  process.exit(0)
+})
 
-  // 处理意外退出
-  process.on('SIGINT', () => {
-    if (accountManager && !process.env.RUN_MODE === "hf") {
-      accountManager.destroy()
-    }
-    process.exit(0)
-  })
-}
 
 module.exports = accountManager
