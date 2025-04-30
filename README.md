@@ -2,6 +2,8 @@
 
 Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以及图像上传功能。
 
+## [交流群](https://t.me/nodejs_project)
+
 ## 配置文件
 
 ### .env 文件
