@@ -7,59 +7,112 @@ const { sendChatRequest } = require('../lib/request.js')
 const accountManager = require('../lib/account.js')
 const { createImageRequest, awaitImage } = require('../lib/image.js')
 const config = require('../config.js')
+const { apiKeyVerify } = require('../lib/tools.js')
 
-router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, async (req, res) => {
 
-  // 身份验证
-  let authToken = req.headers.authorization
-  const messages = req.body.messages
+const isChatType = (model, search) => {
+  if (model.includes('-search') || search) {
+    return 'search'
+  } else {
+    return 't2t'
+  }
+}
 
-  if (!authToken) {
-    return res.status(403)
+const isThinkingEnabled = (model, reasoning) => {
+  if (model.includes('-thinking') || reasoning) {
+    return true
+  } else {
+    return false
+  }
+}
+
+const parserModel = (model) => {
+  if (!model) return 'qwen3-235b-a22b'
+
+  try {
+    model = String(model)
+    model = model.replace('-search', '')
+    model = model.replace('-thinking', '')
+    return model
+  } catch (e) {
+    return 'qwen3-235b-a22b'
+  }
+}
+
+const parserMessages = (messages, reasoning, chat_type) => {
+  try {
+
+    const feature_config = {
+      "thinking_enabled": reasoning,
+      "output_schema": "phase",
+      "thinking_budget": config.thinkingBudget
+    }
+
+    messages.forEach(message => {
+      message.chat_type = "t2t"
+      message.extra = {}
+      message.feature_config = feature_config
+    })
+
+
+    return messages
+  } catch (e) {
+
+  }
+}
+
+const markBody = (req, res, next) => {
+  try {
+
+    // 构建请求体
+    const body = {
+      "stream": true,
+      "incremental_output": true,
+      "chat_type": "t2t",
+      "model": "qwen3-235b-a22b",
+      "messages": [],
+      "session_id": uuid.v4(),
+      "chat_id": uuid.v4(),
+      "id": uuid.v4(),
+      "sub_chat_type": "t2t",
+      "chat_mode": "normal"
+    }
+
+    // 获取请求体原始数据
+    let {
+      messages,            // 消息历史
+      model,               // 模型
+      stream,              // 流式输出
+      search,              // 搜索模式
+      reasoning,           // 推理模式
+    } = req.body
+
+    // 处理 stream 参数
+    if (stream) body.stream = true
+    // 处理 incremental_output 参数 : 是否增量输出
+    body.incremental_output = true
+    // 处理 chat_type 参数 : 聊天类型
+    body.chat_type = isChatType(model, search)
+    // 处理 model 参数 : 模型
+    body.model = parserModel(model)
+    // 处理 messages 参数 : 消息历史
+    body.messages = parserMessages(messages, isThinkingEnabled(model, reasoning), body.chat_type)
+    // 处理 sub_chat_type 参数 : 子聊天类型
+    body.sub_chat_type = body.chat_type
+
+
+    return body
+  } catch (e) {
+    console.log(e)
+    res.status(500)
       .json({
-        error: "请提供正确的 Authorization token"
+        status: 500,
+        message: "在处理请求体时发生错误 ~ ~ ~"
       })
   }
+}
 
-  if (authToken === `Bearer ${config.apiKey}` && accountManager) {
-    authToken = accountManager.getAccountToken()
-  } else if (authToken) {
-    authToken = authToken.replace('Bearer ', '')
-  }
-
-  // 判断是否开启流式输出
-  if (req.body.stream === null || req.body.stream === undefined) {
-    req.body.stream = false
-  }
-  const stream = req.body.stream
-
-  console.log(`[${new Date().toLocaleString()}]: model: ${req.body.model} | stream: ${stream} | authToken: ${authToken?.replace('Bearer ', '')}`)
-
-
-  let file_url = null
-  const isFileMessage = Array.isArray(messages[messages.length - 1].content) === true
-
-  if (isFileMessage) {
-
-    const file = messages[messages.length - 1].content.filter(item => item.type !== 'text')[0]
-
-    if (file && file.type === 'image_url') {
-      file_url = await uploadImage(file.image_url.url, authToken)
-    }
-
-    if (file_url) {
-      messages[messages.length - 1].content[messages[messages.length - 1].content.length - 1] = {
-        "type": "image",
-        "image": file_url,
-      }
-    } else {
-      res.status(500)
-        .json({
-          error: "请求发送失败！！！"
-        })
-      return
-    }
-  }
+router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, apiKeyVerify, async (req, res) => {
 
   const setResHeader = (stream) => {
     try {
@@ -81,7 +134,6 @@ router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, a
 
 
   const notStreamResponse = async (response) => {
-    setResHeader(false)
     try {
       // console.log(response)
       const bodyTemplate = {
@@ -119,9 +171,9 @@ router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, a
     try {
       const id = uuid.v4()
       const decoder = new TextDecoder('utf-8')
-      let backContent = null
       let webSearchInfo = null
       let temp_content = ''
+      let thinkStart = false
       let thinkEnd = false
 
       response.on('start', () => {

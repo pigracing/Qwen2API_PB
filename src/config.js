@@ -11,6 +11,7 @@ const config = {
   redisURL: process.env.REDIS_URL || null,
   autoRefresh: false,
   autoRefreshInterval: 6 * 60 * 60,
+  thinkingBudget: 38912,
   defaultHeaders: {
     "Host": "chat.qwen.ai",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36 Edg/133.0.0.0",
