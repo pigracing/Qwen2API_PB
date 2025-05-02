@@ -2,6 +2,7 @@ const dotenv = require('dotenv')
 dotenv.config()
 
 const config = {
+  dataSaveMode: process.env.DATA_SAVE_MODE || "none",
   apiKey: process.env.API_KEY || null,
   listenAddress: process.env.LISTEN_ADDRESS || null,
   listenPort: process.env.SERVICE_PORT || 3000,

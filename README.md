@@ -17,6 +17,8 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
     SEARCH_INFO_MODE=table
     OUTPUT_THINK=true
     REDIS_URL=
+    ACCOUNTS=
+    DATA_SAVE_MODE=
 ```
 
 ---
@@ -29,23 +31,24 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
     > 监听地址，不填则为 localhost
 - SERVICE_PORT: 服务运行端口
     > 如果需要修改Docker暴露端口，请修改ports中的参数
-
     >示例(8080:3000) 则访问 <http://localhost:8080>
 - API_KEY: 密钥
     > API 密钥 (必填)
 - SEARCH_INFO_MODE: 搜索信息展示模式
     > 搜索信息展示模式，可选 table 或 text
-
     > 示例：table
 - OUTPUT_THINK: 是否输出思考过程
     > 是否输出思考过程，可选 true 或 false
-
     > 示例：true
 - REDIS_URL: redis链接
-    > redis地址，必填（可在Upstash免费创建一个，如使用TLS协议则协议头为：rediss，Tips：Upstash为TLS协议）
+    > redis地址，（可在Upstash免费创建一个，如使用TLS协议则协议头为：rediss，Tips：Upstash为TLS协议）
     ![upstash](./docs/images/upstash.png)
-
----
+- ACCOUNTS: # 账号
+    > 账号与密码用:分隔，账号与账号间用,分隔
+- DATA_SAVE_MODE: 数据保存模式
+    > none 不保存数据，仅使用环境变量中的设置
+    > file 保存在本地文件中
+    > redis 保存到远程/本地redis中
 
 ## 安装与运行
 
@@ -62,7 +65,7 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
 1. 使用 Docker 命令：
 
    ```bash
-   docker run -d -p 3000:3000 -e API_KEY=sk-123456 -e REDIS_URL=redis-cli --tls -u redis://... --name qwen2api rfym21/qwen2api:latest
+   docker run -d -p 3000:3000 -e API_KEY=sk-123456 -e DATA_SAVE_MODE=none -e ACCOUNTS= --name qwen2api rfym21/qwen2api:latest
    ```
 
 2. 使用 docker-compose 运行服务：

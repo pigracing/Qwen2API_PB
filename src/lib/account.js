@@ -3,7 +3,8 @@ const { sha256Encrypt } = require('./tools')
 const { JwtDecode } = require('./tools')
 const config = require('../config.js')
 const redisClient = require('./redis')
-
+const fs = require('fs').promises
+const path = require('path')
 
 class Account {
   constructor() {
@@ -37,16 +38,50 @@ class Account {
   }
 
   async loadAccountTokens() {
-    try {
-      const accountTokens = await redisClient.getAllAccounts()
-      if (accountTokens.length > 0) {
-        this.accountTokens = accountTokens
-      } else {
+    if (config.dataSaveMode === "redis") {
+      try {
+        const accountTokens = await redisClient.getAllAccounts()
+        if (accountTokens.length > 0) {
+          this.accountTokens = accountTokens
+        } else {
+          this.accountTokens = []
+        }
+      } catch (error) {
         this.accountTokens = []
       }
-    } catch (error) {
-      console.error('加载账户数据失败:', error)
-      this.accountTokens = []
+    } else if (config.dataSaveMode === "file") {
+      const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
+      try {
+        if (Setting.accounts) {
+          this.accountTokens = Setting.accounts
+          console.log(`从文件中加载了 ${this.accountTokens.length} 个账户`)
+        } else {
+          this.accountTokens = []
+        }
+      } catch (error) {
+        this.accountTokens = []
+      }
+    } else {
+      try {
+        const accountTokens = process.env.ACCOUNTS.split(',')
+        const accounts = []
+        accountTokens.forEach(item => {
+          const [email, password] = item.split(':')
+          const token = this.login(email, password)
+          if (token) {
+            const decoded = JwtDecode(token)
+            accounts.push({
+              email,
+              password,
+              token,
+              expires: decoded.exp
+            })
+          }
+        })
+        this.accountTokens = accounts
+      } catch (error) {
+        this.accountTokens = []
+      }
     }
   }
 
@@ -265,8 +300,8 @@ class Account {
 
 }
 
-if (!process.env.REDIS_URL && !process.env.API_KEY) {
-  console.log('请务必设置 REDIS_URL 或 API_KEY 环境变量')
+if (!process.env.API_KEY) {
+  console.log('请务必设置 API_KEY 环境变量')
   process.exit(1)
 }
 

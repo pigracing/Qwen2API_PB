@@ -4,6 +4,7 @@ const redisClient = require('../lib/redis')
 const accountManager = require('../lib/account')
 const { JwtDecode } = require('../lib/tools')
 const { apiKeyVerify } = require('./index')
+const { deleteAccount, saveAccounts } = require('../lib/setting')
 
 // 获取所有账号（分页）
 router.get('/getAllAccounts', apiKeyVerify, async (req, res) => {
@@ -51,7 +52,7 @@ router.post('/setAccount', apiKeyVerify, async (req, res) => {
     }
 
     // 检查账号是否已存在
-    const exists = await redisClient.exists(`user:${email}`)
+    const exists = accountManager.accountTokens.find(item => item.email === email)
     if (exists) {
       return res.status(409).json({ error: '账号已存在' })
     }
@@ -64,20 +65,9 @@ router.post('/setAccount', apiKeyVerify, async (req, res) => {
     const decoded = JwtDecode(authToken)
     const expires = decoded.exp
 
-    // 设置账号信息
-    const success = await redisClient.setAccount(email, {
-      password,
-      token: authToken,
-      expires: expires
-    })
+    const success = await saveAccounts(email, password, authToken, expires)
 
     if (success) {
-      accountManager.accountTokens.push({
-        email,
-        password,
-        token: authToken,
-        expires: expires
-      })
       res.status(200).json({
         email,
         message: '账号创建成功'
@@ -103,10 +93,9 @@ router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
     }
 
     // 删除账号
-    const success = await redisClient.deleteAccount(email)
+    const success = await deleteAccount(email)
 
     if (success) {
-      accountManager.deleteAccount(email)
       res.json({ message: '账号删除成功' })
     } else {
       res.status(500).json({ error: '账号删除失败' })
@@ -126,8 +115,8 @@ router.post('/setAccounts', apiKeyVerify, async (req, res) => {
       return res.status(400).json({ error: '账号列表不能为空' })
     }
 
-    accounts = accounts.replace(/[\r]/g, '')
-    accounts = accounts.split('\n')
+    accounts = accounts.replace(/[\r]/g, '\n')
+    accounts = accounts.split('\n').filter(item => item.trim() !== '')
     for (const account of accounts) {
       const [email, password] = account.split(':')
       if (!email || !password) {
@@ -142,22 +131,12 @@ router.post('/setAccounts', apiKeyVerify, async (req, res) => {
       const decoded = JwtDecode(authToken)
       const expires = decoded.exp
 
-      const success = await accountManager.setAccount(email, {
-        password,
-        token: authToken,
-        expires: expires
-      })
+      const success = await saveAccounts(email, password, authToken, expires)
       if (!success) {
         continue
-      } else {
-        accountManager.accountTokens.push({
-          email,
-          password,
-          token: authToken,
-          expires: expires
-        })
       }
     }
+
     res.json({ message: '账号批量添加任务提交成功' })
   } catch (error) {
     console.error('批量创建账号失败:', error)

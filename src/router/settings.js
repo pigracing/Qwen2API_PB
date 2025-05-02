@@ -1,8 +1,8 @@
 const express = require('express')
 const router = express.Router()
-const redisClient = require('../lib/redis')
 const config = require('../config')
 const { apiKeyVerify } = require('./index')
+const { saveDefaultHeaders, saveDefaultCookie } = require('../lib/setting')
 
 
 router.get('/settings', apiKeyVerify, async (req, res) => {
@@ -40,7 +40,7 @@ router.post('/setHeaders', apiKeyVerify, async (req, res) => {
       return res.status(400).json({ error: '无效的请求头格式' })
     }
 
-    const success = await redisClient.set('defaultHeaders', JSON.stringify(headers))
+    const success = await saveDefaultHeaders(headers)
     if (success) {
       config.defaultHeaders = headers
       res.json({ message: '默认请求头更新成功', headers })
@@ -61,7 +61,7 @@ router.post('/setCookie', apiKeyVerify, async (req, res) => {
       return res.status(400).json({ error: 'Cookie不能为空' })
     }
 
-    const success = await redisClient.set('defaultCookie', cookie)
+    const success = await saveDefaultCookie(cookie)
     if (success) {
       config.defaultCookie = cookie
       res.json({ message: '默认Cookie更新成功', cookie })

@@ -1,0 +1,12 @@
+{
+  "defaultHeaders": null,
+  "defaultCookie": null,
+  "accounts": [
+    {
+      "email": "your_email@example.com",
+      "password": "your_password",
+      "token": "your_token",
+      "expired": "your_expired_time"
+    }
+  ]
+}

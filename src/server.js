@@ -48,6 +48,7 @@ const startInfo = `
 接口路径：${config.apiPrefix ? config.apiPrefix : '未设置'}
 思考输出：${config.outThink ? '开启' : '关闭'}
 搜索显示：${config.searchInfoMode === 'table' ? '表格' : '文本'}
+数据保存模式：${config.dataSaveMode}
 开源地址：https://github.com/Rfym21/Qwen2API
 Tips：如果你是因为报错而来看日志的，那么建议看看下面几条：
 1. 在环境变量中添加了账号但是启动失败，或无法获取到账号
