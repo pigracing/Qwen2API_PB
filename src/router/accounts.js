@@ -110,7 +110,7 @@ router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
 // 批量添加账号
 router.post('/setAccounts', apiKeyVerify, async (req, res) => {
   try {
-    const { accounts } = req.body
+    let { accounts } = req.body
     if (!accounts) {
       return res.status(400).json({ error: '账号列表不能为空' })
     }
