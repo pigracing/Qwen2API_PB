@@ -98,15 +98,6 @@ class Account {
     const token = this.accountTokens[this.currentIndex]
     this.currentIndex++
 
-    // 检查令牌是否即将过期
-    if (this.isTokenExpiringSoon(token)) {
-      console.log(`令牌即将过期，尝试刷新: ${token.email}`)
-      // 异步刷新令牌，不阻塞当前请求
-      this.refreshSingleToken(token).catch(err =>
-        console.error(`刷新令牌失败 (${token.email}):`, err.message)
-      )
-    }
-
     if (token.token) {
       return token.token
     } else {
@@ -224,18 +215,19 @@ class Account {
     return this.accountTokens
   }
 
-  getHeaders(authToken) {
+  getHeaders() {
+    const token = this.getAccountToken()
     const headers = {
       ...this.defaultHeaders,
-      "authorization": `Bearer ${authToken}`,
-      "cookie": this.getCookie(authToken)
+      "authorization": `Bearer ${token}`,
+      "cookie": this.getCookie(token)
     }
 
     return headers
   }
 
-  getCookie(authToken) {
-    return `token=${authToken}; ${config.defaultCookie}`
+  getCookie(token) {
+    return `token=${token}; ${config.defaultCookie}`
   }
 
   async login(email, password) {

@@ -5,9 +5,8 @@ const { uploadImage } = require('../lib/upload.js')
 const { isJson } = require('../lib/tools.js')
 const { sendChatRequest } = require('../lib/request.js')
 const accountManager = require('../lib/account.js')
-const { createImageRequest, awaitImage } = require('../lib/image.js')
 const config = require('../config.js')
-const { apiKeyVerify } = require('../lib/tools.js')
+const { apiKeyVerify } = require('../router/index.js')
 
 
 const isChatType = (model, search) => {
@@ -18,12 +17,23 @@ const isChatType = (model, search) => {
   }
 }
 
-const isThinkingEnabled = (model, reasoning) => {
-  if (model.includes('-thinking') || reasoning) {
-    return true
-  } else {
-    return false
+const isThinkingEnabled = (model, enable_thinking, thinking_budget) => {
+
+  const thinking_config = {
+    "output_schema": "phase",
+    "thinking_enabled": false,
+    "thinking_budget": 38912
   }
+
+  if (model.includes('-thinking') || enable_thinking) {
+    thinking_config.thinking_enabled = true
+  }
+
+  if (thinking_budget && Number(thinking_budget) !== Number.NaN && Number(thinking_budget) > 0 && Number(thinking_budget) < 38912) {
+    thinking_config.budget = Number(thinking_budget)
+  }
+
+  return thinking_config
 }
 
 const parserModel = (model) => {
@@ -39,25 +49,38 @@ const parserModel = (model) => {
   }
 }
 
-const parserMessages = (messages, reasoning, chat_type) => {
+const parserMessages = (messages, thinking_config, chat_type) => {
   try {
 
-    const feature_config = {
-      "thinking_enabled": reasoning,
-      "output_schema": "phase",
-      "thinking_budget": config.thinkingBudget
-    }
-
+    const feature_config = thinking_config
     messages.forEach(message => {
-      message.chat_type = "t2t"
-      message.extra = {}
-      message.feature_config = feature_config
+      if (message.role === 'user' || message.role === 'assistant') {
+        message.chat_type = "t2t"
+        message.extra = {}
+        message.feature_config = {
+          "output_schema": "phase",
+          "thinking_enabled": false,
+        }
+      }
     })
 
+    messages[messages.length - 1].feature_config = feature_config
+    messages[messages.length - 1].chat_type = chat_type
 
     return messages
   } catch (e) {
-
+    return [
+      {
+        "role": "user",
+        "content": "直接返回字符串： '聊天历史处理有误...'",
+        "chat_type": "t2t",
+        "extra": {},
+        "feature_config": {
+          "output_schema": "phase",
+          "enabled": false,
+        }
+      }
+    ]
   }
 }
 
@@ -84,24 +107,32 @@ const markBody = (req, res, next) => {
       model,               // 模型
       stream,              // 流式输出
       search,              // 搜索模式
-      reasoning,           // 推理模式
+      enable_thinking,     // 是否启用思考
+      thinking_budget      // 思考预算
     } = req.body
 
     // 处理 stream 参数
-    if (stream) body.stream = true
+    if (stream === true || stream === 'true') {
+      body.stream = true
+    } else {
+      body.stream = false
+    }
     // 处理 incremental_output 参数 : 是否增量输出
     body.incremental_output = true
     // 处理 chat_type 参数 : 聊天类型
     body.chat_type = isChatType(model, search)
+    req.enable_web_search = body.chat_type === 'search' ? true : false
     // 处理 model 参数 : 模型
     body.model = parserModel(model)
     // 处理 messages 参数 : 消息历史
-    body.messages = parserMessages(messages, isThinkingEnabled(model, reasoning), body.chat_type)
+    body.messages = parserMessages(messages, isThinkingEnabled(model, enable_thinking, thinking_budget), body.chat_type)
+    req.enable_thinking = isThinkingEnabled(model, enable_thinking, thinking_budget).enabled
     // 处理 sub_chat_type 参数 : 子聊天类型
     body.sub_chat_type = body.chat_type
 
 
-    return body
+    req.body = body
+    next()
   } catch (e) {
     console.log(e)
     res.status(500)
@@ -112,7 +143,126 @@ const markBody = (req, res, next) => {
   }
 }
 
-router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, apiKeyVerify, async (req, res) => {
+const streamResponse = async (res, response, enable_thinking, enable_web_search) => {
+  try {
+    const message_id = uuid.v4()
+    const decoder = new TextDecoder('utf-8')
+    let web_search_info = null
+    let thinking_start = false
+    let thinking_end = false
+
+    response.on('data', async (chunk) => {
+      const decodeText = decoder.decode(chunk, { stream: true })
+      // console.log(decodeText)
+      const lists = decodeText.split('\n').filter(item => item.trim() !== '')
+      for (const item of lists) {
+        try {
+          let decodeJson = isJson(item.replace("data: ", '')) ? JSON.parse(item.replace("data: ", '')) : null
+          if (decodeJson === null) {
+            continue
+          }
+          if (!decodeJson.choices[0].delta.content || (decodeJson.choices[0].delta.phase !== 'think' && decodeJson.choices[0].delta.phase !== 'answer')) return
+
+          let content = decodeJson.choices[0].delta.content
+
+          if (decodeJson.choices[0].delta.phase === 'think' && !thinking_start) {
+            thinking_start = true
+            content = `<think>\n\n${content}`
+          }
+          if (decodeJson.choices[0].delta.phase === 'answer' && !thinking_end) {
+            thinking_end = true
+            content = `\n\n</think>\n${content}`
+          }
+
+          // // 处理 web_search 信息
+          // if (decodeJson.choices[0].delta.name === 'web_search') {
+          //   webSearchInfo = decodeJson.choices[0].delta.extra.web_search_info
+          // }
+
+          const StreamTemplate = {
+            "id": `chatcmpl-${message_id}`,
+            "object": "chat.completion.chunk",
+            "created": new Date().getTime(),
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": content
+                },
+                "finish_reason": null
+              }
+            ]
+          }
+
+          res.write(`data: ${JSON.stringify(StreamTemplate)}\n\n`)
+        } catch (error) {
+          console.log(error)
+          res.status(500).json({ error: "服务错误!!!" })
+        }
+      }
+    })
+
+    response.on('end', async () => {
+      if (process.env.OUTPUT_THINK === "false" && webSearchInfo) {
+        const webSearchTable = await accountManager.generateMarkdownTable(webSearchInfo, process.env.SEARCH_INFO_MODE || "table")
+        res.write(`data: ${JSON.stringify({
+          "id": `chatcmpl-${id}`,
+          "object": "chat.completion.chunk",
+          "created": new Date().getTime(),
+          "choices": [
+            {
+              "index": 0,
+              "delta": {
+                "content": `\n\n\n${webSearchTable}`
+              }
+            }
+          ]
+        })}\n\n`)
+      }
+      res.write(`data: [DONE]\n\n`)
+      res.end()
+    })
+  } catch (error) {
+    console.log(error)
+    res.status(500).json({ error: "服务错误!!!" })
+  }
+}
+
+const notStreamResponse = async (res, response, enable_thinking, enable_web_search, model) => {
+  try {
+    const bodyTemplate = {
+      "id": `chatcmpl-${uuid.v4()}`,
+      "object": "chat.completion",
+      "created": new Date().getTime(),
+      "model": model,
+      "choices": [
+        {
+          "index": 0,
+          "message": {
+            "role": "assistant",
+            "content": response.choices[0].message.content
+          },
+          "finish_reason": "stop"
+        }
+      ],
+      "usage": {
+        "prompt_tokens": 512,
+        "completion_tokens": response.choices[0].message.content.length,
+        "total_tokens": 512 + response.choices[0].message.content.length
+      }
+    }
+    res.json(bodyTemplate)
+  } catch (error) {
+    console.log(error)
+    res.status(500)
+      .json({
+        error: "服务错误!!!"
+      })
+  }
+}
+
+router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, apiKeyVerify, markBody, async (req, res) => {
+  const { stream, enable_thinking, enable_web_search, model } = req.body
 
   const setResHeader = (stream) => {
     try {
@@ -132,158 +282,8 @@ router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, a
     }
   }
 
-
-  const notStreamResponse = async (response) => {
-    try {
-      // console.log(response)
-      const bodyTemplate = {
-        "id": `chatcmpl-${uuid.v4()}`,
-        "object": "chat.completion",
-        "created": new Date().getTime(),
-        "model": req.body.model,
-        "choices": [
-          {
-            "index": 0,
-            "message": {
-              "role": "assistant",
-              "content": response.choices[0].message.content
-            },
-            "finish_reason": "stop"
-          }
-        ],
-        "usage": {
-          "prompt_tokens": JSON.stringify(req.body.messages).length,
-          "completion_tokens": response.choices[0].message.content.length,
-          "total_tokens": JSON.stringify(req.body.messages).length + response.choices[0].message.content.length
-        }
-      }
-      res.json(bodyTemplate)
-    } catch (error) {
-      console.log(error)
-      res.status(500)
-        .json({
-          error: "服务错误!!!"
-        })
-    }
-  }
-
-  const streamResponse = async (response, thinkingEnabled) => {
-    try {
-      const id = uuid.v4()
-      const decoder = new TextDecoder('utf-8')
-      let webSearchInfo = null
-      let temp_content = ''
-      let thinkStart = false
-      let thinkEnd = false
-
-      response.on('start', () => {
-        setResHeader(true)
-      })
-
-      response.on('data', async (chunk) => {
-        const decodeText = decoder.decode(chunk, { stream: true })
-        // console.log(decodeText)
-        const lists = decodeText.split('\n').filter(item => item.trim() !== '')
-        for (const item of lists) {
-          try {
-            let decodeJson = isJson(item.replace("data: ", '')) ? JSON.parse(item.replace("data: ", '')) : null
-            if (decodeJson === null) {
-              temp_content += item
-              decodeJson = isJson(temp_content.replace("data: ", '')) ? JSON.parse(temp_content.replace("data: ", '')) : null
-              if (decodeJson === null) {
-                continue
-              }
-              temp_content = ''
-            }
-
-            // 处理 web_search 信息
-            if (decodeJson.choices[0].delta.name === 'web_search') {
-              webSearchInfo = decodeJson.choices[0].delta.extra.web_search_info
-            }
-
-            // 处理内容
-            let content = decodeJson.choices[0].delta.content
-
-            if (backContent !== null) {
-              content = content.replace(backContent, '')
-            }
-
-            backContent = decodeJson.choices[0].delta.content
-
-            if (thinkingEnabled && process.env.OUTPUT_THINK === "false" && !thinkEnd && !backContent.includes("</think>")) {
-              continue
-            } else if (thinkingEnabled && process.env.OUTPUT_THINK === "false" && !thinkEnd && backContent.includes("</think>")) {
-              content = content.replace("</think>", "")
-              thinkEnd = true
-            }
-
-            if (webSearchInfo && process.env.OUTPUT_THINK === "true") {
-              if (thinkingEnabled && content.includes("<think>")) {
-                content = content.replace("<think>", `<think>\n\n\n${await accountManager.generateMarkdownTable(webSearchInfo, process.env.SEARCH_INFO_MODE || "table")}\n\n\n`)
-                webSearchInfo = null
-              } else if (!thinkingEnabled) {
-                content = `<think>\n${await accountManager.generateMarkdownTable(webSearchInfo, process.env.SEARCH_INFO_MODE || "table")}\n</think>\n${content}`
-                webSearchInfo = null
-              }
-            }
-            // console.log(content)
-
-            const StreamTemplate = {
-              "id": `chatcmpl-${id}`,
-              "object": "chat.completion.chunk",
-              "created": new Date().getTime(),
-              "choices": [
-                {
-                  "index": 0,
-                  "delta": {
-                    "content": content
-                  },
-                  "finish_reason": null
-                }
-              ]
-            }
-            res.write(`data: ${JSON.stringify(StreamTemplate)}\n\n`)
-          } catch (error) {
-            console.log(error)
-            res.status(500).json({ error: "服务错误!!!" })
-          }
-        }
-      })
-
-      response.on('end', async () => {
-        if (process.env.OUTPUT_THINK === "false" && webSearchInfo) {
-          const webSearchTable = await accountManager.generateMarkdownTable(webSearchInfo, process.env.SEARCH_INFO_MODE || "table")
-          res.write(`data: ${JSON.stringify({
-            "id": `chatcmpl-${id}`,
-            "object": "chat.completion.chunk",
-            "created": new Date().getTime(),
-            "choices": [
-              {
-                "index": 0,
-                "delta": {
-                  "content": `\n\n\n${webSearchTable}`
-                }
-              }
-            ]
-          })}\n\n`)
-        }
-        res.write(`data: [DONE]\n\n`)
-        res.end()
-      })
-    } catch (error) {
-      console.log(error)
-      res.status(500).json({ error: "服务错误!!!" })
-    }
-  }
-
   try {
-    let response_data = null
-    if (req.body.model.includes('-draw')) {
-      response_data = await createImageRequest(req.body.messages[req.body.messages.length - 1].content, req.body.model, '1024*1024', authToken)
-      console.log(response_data)
-    } else {
-      response_data = await sendChatRequest(req.body.model, messages, stream, authToken)
-    }
+    const response_data = await sendChatRequest(req.body)
 
     if (response_data.status === !200 || !response_data.response) {
       res.status(500)
@@ -293,69 +293,12 @@ router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, a
       return
     }
 
-    if (req.body.model.includes('-draw')) {
-      response_data = await awaitImage(response_data.response, authToken)
-      if (response_data.status !== 200) {
-        res.status(500)
-          .json({
-            error: "请求发送失败！！！"
-          })
-        return
-      }
-    }
-
     if (stream) {
-      if (req.body.model.includes('-draw')) {
-        const StreamTemplate = {
-          "id": `chatcmpl-${uuid.v4()}`,
-          "object": "chat.completion.chunk",
-          "created": new Date().getTime(),
-          "choices": [
-            {
-              "index": 0,
-              "delta": {
-                "content": `![${response_data.url}](${response_data.url})`
-              },
-              "finish_reason": null
-            }
-          ]
-        }
-        setResHeader(stream)
-        res.write(`data: ${JSON.stringify(StreamTemplate)}\n\n`)
-        res.write(`data: [DONE]\n\n`)
-        res.end()
-      } else {
-        streamResponse(response_data.response, (req.body.model.includes('-thinking') || req.body.model.includes('qwq-32b')) ? true : false)
-      }
-
+      setResHeader(true)
+      streamResponse(res, response_data.response, enable_thinking, enable_web_search)
     } else {
-      if (req.body.model.includes('-draw')) {
-        const bodyTemplate = {
-          "id": `chatcmpl-${uuid.v4()}`,
-          "object": "chat.completion",
-          "created": new Date().getTime(),
-          "model": req.body.model,
-          "choices": [
-            {
-              "index": 0,
-              "message": {
-                "role": "assistant",
-                "content": `![${response_data.url}](${response_data.url})`
-              },
-              "finish_reason": "stop"
-            }
-          ],
-          "usage": {
-            "prompt_tokens": 1024,
-            "completion_tokens": 1024,
-            "total_tokens": 2048
-          }
-        }
-        setResHeader(stream)
-        res.json(bodyTemplate)
-      } else {
-        notStreamResponse(response_data.response)
-      }
+      setResHeader(false)
+      notStreamResponse(res, response_data.response, enable_thinking, enable_web_search, model)
     }
 
   } catch (error) {

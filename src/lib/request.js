@@ -1,50 +1,7 @@
 const axios = require('axios')
 const uuid = require('uuid')
 const accountManager = require('./account.js')
-const sendChatRequest = async (model, messages, stream, authToken) => {
-  if (!messages[messages.length - 1].chat_type) {
-    messages[messages.length - 1].chat_type = "t2t"
-  }
-
-  if (!messages[messages.length - 1].extra) {
-    messages[messages.length - 1].extra = {}
-  }
-
-  if (!messages[messages.length - 1].feature_config) {
-    messages[messages.length - 1].feature_config = {
-      "thinking_enabled": false
-    }
-  }
-
-  messages.forEach(message => {
-    if (message.role === 'developer') {
-      message.role = 'system'
-    }
-  })
-
-  let body = {
-    "model": model,
-    "messages": messages,
-    "stream": stream,
-    "chat_type": "t2t",
-    "id": uuid.v4()
-  }
-
-  // 判断是否开启推理
-  let thinkingEnabled = false
-  if (model.includes('-thinking') || model.includes('qwq-32b')) {
-    thinkingEnabled = true
-    messages[messages.length - 1].feature_config = {
-      "thinking_enabled": thinkingEnabled
-    }
-    body.model = body.model.replace('-thinking', '')
-  }
-
-  if (model.includes('-search')) {
-    messages[messages.length - 1].chat_type = 'search'
-    body.model = body.model.replace('-search', '')
-    body.chat_type = 'search'
-  }
+const sendChatRequest = async (body) => {
 
   if (accountManager) {
     const models = await accountManager.getModels()
@@ -54,18 +11,15 @@ const sendChatRequest = async (model, messages, stream, authToken) => {
   }
 
   try {
-
     // console.log(JSON.stringify(body))
     const response = await axios.post('https://chat.qwen.ai/api/chat/completions',
       body,
       {
-        headers: accountManager.getHeaders(authToken),
-        responseType: stream ? 'stream' : 'json'
+        headers: accountManager.getHeaders(),
+        responseType: body.stream ? 'stream' : 'json'
       }
     )
-    // console.log("response", response.data)
-    // 结束程序
-    // process.exit(0)
+
     return {
       status: 200,
       response: response.data
