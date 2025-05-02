@@ -7,7 +7,7 @@ const config = {
   listenAddress: process.env.LISTEN_ADDRESS || null,
   listenPort: process.env.SERVICE_PORT || 3000,
   apiPrefix: process.env.API_PREFIX || '',
-  searchInfoMode: process.env.SEARCH_INFO_MODE === 'true' ? "table" : "text",
+  searchInfoMode: process.env.SEARCH_INFO_MODE === 'table' ? "table" : "text",
   outThink: process.env.OUTPUT_THINK === 'true' ? true : false,
   redisURL: process.env.REDIS_URL || null,
   autoRefresh: false,

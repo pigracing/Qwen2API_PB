@@ -71,15 +71,17 @@ const saveAccounts = async (email, password, token, expires) => {
     try {
       const success = await redisClient.setAccount(email, {
         password,
-        token: authToken,
+        token: token,
         expires: expires
       })
       if (success) {
+        await accountManager.loadAccountTokens()
         return true
       } else {
         return false
       }
     } catch (error) {
+      console.log(error)
       return false
     }
   } else if (config.dataSaveMode === "file") {
@@ -93,11 +95,13 @@ const saveAccounts = async (email, password, token, expires) => {
           expires
         })
         await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
+        await accountManager.loadAccountTokens()
         return true
       } else {
         return false
       }
     } catch (error) {
+      console.log(error)
       return false
     }
   } else {
@@ -118,7 +122,9 @@ const saveAccounts = async (email, password, token, expires) => {
 const deleteAccount = async (email) => {
   if (config.dataSaveMode === "redis") {
     try {
-      return await redisClient.deleteAccount(email)
+      await redisClient.deleteAccount(email)
+      await accountManager.loadAccountTokens()
+      return true
     } catch (error) {
       return false
     }
@@ -127,6 +133,7 @@ const deleteAccount = async (email) => {
       const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
       Setting.accounts = Setting.accounts.filter(item => item.email !== email)
       await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
+      await accountManager.loadAccountTokens()
       return true
     } catch (error) {
       return false
@@ -145,6 +152,7 @@ const saveDefaultHeaders = async (headers) => {
   if (config.dataSaveMode === "redis") {
     try {
       await redisClient.set('defaultHeaders', JSON.stringify(headers))
+      config.defaultHeaders = headers
       return true
     } catch (error) {
       return false
@@ -154,6 +162,7 @@ const saveDefaultHeaders = async (headers) => {
       const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
       Setting.defaultHeaders = headers
       await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
+      config.defaultHeaders = headers
       return true
     } catch (error) {
       return false
@@ -168,6 +177,7 @@ const saveDefaultCookie = async (cookie) => {
   if (config.dataSaveMode === "redis") {
     try {
       await redisClient.set('defaultCookie', JSON.stringify(cookie))
+      config.defaultCookie = cookie
       return true
     } catch (error) {
       return false
@@ -178,6 +188,7 @@ const saveDefaultCookie = async (cookie) => {
       if (Setting.defaultCookie) {
         Setting.defaultCookie = cookie
         await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
+        config.defaultCookie = cookie
         return true
       } else {
         return false

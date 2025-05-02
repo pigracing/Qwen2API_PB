@@ -161,23 +161,29 @@ const streamResponse = async (res, response, enable_thinking, enable_web_search)
           if (decodeJson === null) {
             continue
           }
+
+          // 处理 web_search 信息
+          if (decodeJson.choices[0].delta.name === 'web_search') {
+            web_search_info = decodeJson.choices[0].delta.extra.web_search_info
+            // console.log(web_search_info)
+          }
+
           if (!decodeJson.choices[0].delta.content || (decodeJson.choices[0].delta.phase !== 'think' && decodeJson.choices[0].delta.phase !== 'answer')) return
 
           let content = decodeJson.choices[0].delta.content
 
           if (decodeJson.choices[0].delta.phase === 'think' && !thinking_start) {
             thinking_start = true
-            content = `<think>\n\n${content}`
+            if (web_search_info) {
+              content = `<think>\n\n${await accountManager.generateMarkdownTable(web_search_info, config.searchInfoMode)}\n\n${content}`
+            } else {
+              content = `<think>\n\n${content}`
+            }
           }
           if (decodeJson.choices[0].delta.phase === 'answer' && !thinking_end && thinking_start) {
             thinking_end = true
             content = `\n\n</think>\n${content}`
           }
-
-          // // 处理 web_search 信息
-          // if (decodeJson.choices[0].delta.name === 'web_search') {
-          //   webSearchInfo = decodeJson.choices[0].delta.extra.web_search_info
-          // }
 
           const StreamTemplate = {
             "id": `chatcmpl-${message_id}`,
@@ -203,8 +209,8 @@ const streamResponse = async (res, response, enable_thinking, enable_web_search)
     })
 
     response.on('end', async () => {
-      if (process.env.OUTPUT_THINK === "false" && webSearchInfo) {
-        const webSearchTable = await accountManager.generateMarkdownTable(webSearchInfo, process.env.SEARCH_INFO_MODE || "table")
+      if ((config.outThink === false || !enable_thinking) && web_search_info) {
+        const webSearchTable = await accountManager.generateMarkdownTable(web_search_info, config.searchInfoMode || "text")
         res.write(`data: ${JSON.stringify({
           "id": `chatcmpl-${id}`,
           "object": "chat.completion.chunk",
@@ -213,7 +219,7 @@ const streamResponse = async (res, response, enable_thinking, enable_web_search)
             {
               "index": 0,
               "delta": {
-                "content": `\n\n\n${webSearchTable}`
+                "content": `\n\n---\n${web_search_info}`
               }
             }
           ]
