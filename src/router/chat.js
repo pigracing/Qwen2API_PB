@@ -171,7 +171,7 @@ const streamResponse = async (res, response, enable_thinking, enable_web_search)
           }
           if (decodeJson.choices[0].delta.phase === 'answer' && !thinking_end && thinking_start) {
             thinking_end = true
-            content = `${content}\n\n</think>\n`
+            content = `\n\n</think>\n${content}`
           }
 
           // // 处理 web_search 信息
