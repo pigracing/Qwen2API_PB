@@ -9,7 +9,7 @@ const getDefaultHeaders = async () => {
     try {
       const headers = await redisClient.checkKeyExists('defaultHeaders')
       if (headers) {
-        return JSON.parse(headers)
+        return JSON.parse(redisClient.get('defaultHeaders'))
       } else {
         await redisClient.set('defaultHeaders', JSON.stringify(config.defaultHeaders))
         return config.defaultHeaders
@@ -40,7 +40,7 @@ const getDefaultCookie = async () => {
     try {
       const cookie = await redisClient.checkKeyExists('defaultCookie')
       if (cookie) {
-        return JSON.parse(cookie)
+        return JSON.parse(redisClient.get('defaultCookie'))
       } else {
         await redisClient.set('defaultCookie', JSON.stringify(config.defaultCookie))
         return config.defaultCookie

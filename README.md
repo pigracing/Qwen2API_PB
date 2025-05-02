@@ -25,7 +25,6 @@ Qwen2API 是一个基于 Node.js 的 API 服务，提供聊天模型的接口以
 
 - API_PREFIX: 服务路径
     > API 路径，不填则为空(<http://localhost:3000>)
-
     > 示例(/api) 则访问 <http://localhost:3000/api>
 - LISTEN_ADDRESS: 监听地址
     > 监听地址，不填则为 localhost
