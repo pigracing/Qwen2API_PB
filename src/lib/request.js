@@ -1,6 +1,8 @@
 const axios = require('axios')
 const uuid = require('uuid')
 const accountManager = require('./account.js')
+const { sleep } = require('./tools.js')
+
 const sendChatRequest = async (body) => {
 
   if (accountManager) {
@@ -26,7 +28,11 @@ const sendChatRequest = async (body) => {
     }
   }
   catch (error) {
-    console.log(123, error)
+    console.log("发送请求失败:", error.status || error.response.status || error.code)
+    if (error.status === 429 || error.response.status === 429 || error.code === 429) {
+      await sleep(1000)
+      return sendChatRequest(body)
+    }
     // process.exit(0)
     return {
       status: 500,

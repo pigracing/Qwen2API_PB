@@ -109,8 +109,8 @@ const saveAccounts = async (email, password, token, expires) => {
       accountManager.accountTokens.push({
         email,
         password,
-        token: authToken,
-        expires: expires
+        token,
+        expires
       })
       return true
     } catch (error) {

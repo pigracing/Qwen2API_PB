@@ -27,6 +27,7 @@ services:
       - OUTPUT_THINK=true
       # redis 连接地址(必填)
       - REDIS_URL=redis://redis:6379
+      - DATA_SAVE_MODE=redis
   redis:
     image: redis:7.2-alpine
     container_name: redis_qwen2api

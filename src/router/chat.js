@@ -158,7 +158,7 @@ const streamResponse = async (res, response, enable_thinking, enable_web_search)
       for (const item of lists) {
         try {
           let decodeJson = isJson(item.replace("data: ", '')) ? JSON.parse(item.replace("data: ", '')) : null
-          if (decodeJson === null) {
+          if (decodeJson === null || !decodeJson.choices || decodeJson.choices.length === 0) {
             continue
           }
 
@@ -269,8 +269,10 @@ const notStreamResponse = async (res, response, enable_thinking, enable_web_sear
 
 router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, apiKeyVerify, markBody, async (req, res) => {
   const { stream, enable_thinking, enable_web_search, model } = req.body
+  let setResHeaderStatus = false
 
   const setResHeader = (stream) => {
+    if (setResHeaderStatus) return
     try {
       if (stream) {
         res.set({
@@ -278,10 +280,12 @@ router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, a
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
         })
+        setResHeaderStatus = true
       } else {
         res.set({
           'Content-Type': 'application/json',
         })
+        setResHeaderStatus = true
       }
     } catch (e) {
       console.log(e)
@@ -308,7 +312,7 @@ router.post(`${config.apiPrefix ? config.apiPrefix : ''}/v1/chat/completions`, a
     }
 
   } catch (error) {
-    console.log(error)
+    // console.log(error)
     res.status(500)
       .json({
         error: "token无效,请求发送失败！！！"

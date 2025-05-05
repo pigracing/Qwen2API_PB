@@ -10,7 +10,7 @@ const { deleteAccount, saveAccounts } = require('../lib/setting')
 router.get('/getAllAccounts', apiKeyVerify, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
-    const pageSize = parseInt(req.query.pageSize) || 10
+    const pageSize = parseInt(req.query.pageSize) || 1000
     const start = (page - 1) * pageSize
 
     // 获取所有账号键
@@ -85,9 +85,10 @@ router.post('/setAccount', apiKeyVerify, async (req, res) => {
 router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
   try {
     const { email } = req.body
+    console.log(email)
 
     // 检查账号是否存在
-    const exists = await redisClient.exists(`user:${email}`)
+    const exists = await accountManager.accountTokens.find(item => item.email === email)
     if (!exists) {
       return res.status(404).json({ error: '账号不存在' })
     }

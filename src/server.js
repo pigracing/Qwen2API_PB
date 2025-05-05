@@ -4,6 +4,7 @@ const config = require('./config.js')
 const cors = require('cors')
 const app = express()
 const path = require('path')
+const fs = require('fs')
 const { getDefaultHeaders, getDefaultCookie } = require('./lib/setting')
 const modelsRouter = require('./router/models.js')
 const chatRouter = require('./router/chat.js')
@@ -12,9 +13,20 @@ const verifyRouter = require('./router/verify.js')
 const accountsRouter = require('./router/accounts.js')
 const settingsRouter = require('./router/settings.js')
 
+if (config.dataSaveMode === 'file') {
+  if (!fs.existsSync(path.join(__dirname, '../data/data.json'))) {
+    fs.writeFileSync(path.join(__dirname, '../data/data.json'), JSON.stringify({ "defaultHeaders": null, "defaultCookie": null, "accounts": [] }, null, 2))
+  }
+}
+
 app.use(bodyParser.json({ limit: '128mb' }))
 app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }))
 app.use(cors())
+// 处理错误中间件
+app.use((err, req, res, next) => {
+  console.error(err.stack)
+  res.status(500).send('服务器内部错误')
+})
 // API路由
 app.use(modelsRouter)
 app.use(chatRouter)
@@ -23,10 +35,10 @@ app.use(verifyRouter)
 app.use('/api', accountsRouter)
 app.use('/api', settingsRouter)
 
-app.use(express.static(path.join(__dirname, '../public/client')))
+app.use(express.static(path.join(__dirname, '../public/dist')))
 app.get('*', (req, res) => {
   // 确保发送的是 public 目录下的 index.html
-  res.sendFile(path.join(__dirname, '../public/client/index.html'), (err) => {
+  res.sendFile(path.join(__dirname, '../public/dist/index.html'), (err) => {
     if (err) {
       console.error("管理页面加载失败", err)
       res.status(500).send('服务器内部错误')
