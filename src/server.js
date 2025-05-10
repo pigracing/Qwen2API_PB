@@ -1,63 +1,117 @@
-const express = require('express')
-const bodyParser = require('body-parser')
-const config = require('./config.js')
-const cors = require('cors')
-const app = express()
-const path = require('path')
-const fs = require('fs')
-const { getDefaultHeaders, getDefaultCookie } = require('./lib/setting')
-const modelsRouter = require('./router/models.js')
-const chatRouter = require('./router/chat.js')
-const imagesRouter = require('./router/images.js')
-const verifyRouter = require('./router/verify.js')
-const accountsRouter = require('./router/accounts.js')
-const settingsRouter = require('./router/settings.js')
+// server.js
+const express = require('express');
+const bodyParser = require('body-parser');
+const config = require('./config.js');
+const cors = require('cors');
+const app = express();
+const path = require('path');
+const fs = require('fs');
+const { getDefaultHeaders, getDefaultCookie } = require('./lib/setting');
 
+// 引入路由
+const modelsRouter = require('./router/models.js');
+const chatRouter = require('./router/chat.js');
+const imagesRouter = require('./router/images.js');
+const verifyRouter = require('./router/verify.js');
+const accountsRouter = require('./router/accounts.js');
+const settingsRouter = require('./router/settings.js');
+const fileUploadRouter = require('./router/file_upload.js');
+
+const dataDirPath = path.join(__dirname, '../data');
+const dataFilePath = path.join(dataDirPath, 'data.json');
+
+// 如果配置为文件存储模式，则检查并创建数据目录和文件
 if (config.dataSaveMode === 'file') {
-  if (!fs.existsSync(path.join(__dirname, '../data/data.json'))) {
-    fs.writeFileSync(path.join(__dirname, '../data/data.json'), JSON.stringify({ "defaultHeaders": null, "defaultCookie": null, "accounts": [] }, null, 2))
+  if (!fs.existsSync(dataDirPath)) {
+    try {
+      fs.mkdirSync(dataDirPath, { recursive: true }); // 确保父目录存在
+      console.log(`[信息] 数据目录创建成功: ${dataDirPath}`);
+    } catch (err) {
+      console.error(`[错误] 创建数据目录失败: ${dataDirPath}`, err);
+    }
+  }
+  if (fs.existsSync(dataDirPath) && !fs.existsSync(dataFilePath)) {
+    try {
+      fs.writeFileSync(dataFilePath, JSON.stringify({ "defaultHeaders": null, "defaultCookie": null, "accounts": [] }, null, 2));
+      console.log(`[信息] 数据文件创建成功: ${dataFilePath}`);
+    } catch (err) {
+      console.error(`[错误] 创建数据文件失败: ${dataFilePath}`, err);
+    }
   }
 }
 
-app.use(bodyParser.json({ limit: '128mb' }))
-app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }))
-app.use(cors())
-// 处理错误中间件
-app.use((err, req, res, next) => {
-  console.error(err.stack)
-  res.status(500).send('服务器内部错误')
-})
+app.use(bodyParser.json({ limit: '128mb' }));
+app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }));
+app.use(cors());
+
 // API路由
-app.use(modelsRouter)
-app.use(chatRouter)
-app.use(imagesRouter)
-app.use(verifyRouter)
-app.use('/api', accountsRouter)
-app.use('/api', settingsRouter)
+app.use(modelsRouter);
+app.use(chatRouter);
+app.use(imagesRouter);
+app.use(verifyRouter);
+app.use('/api', accountsRouter);
+app.use('/api', settingsRouter);
+app.use(fileUploadRouter);
 
-app.use(express.static(path.join(__dirname, '../public/dist')))
-app.get('*', (req, res) => {
-  // 确保发送的是 public 目录下的 index.html
-  res.sendFile(path.join(__dirname, '../public/dist/index.html'), (err) => {
-    if (err) {
-      console.error("管理页面加载失败", err)
-      res.status(500).send('服务器内部错误')
+// 静态文件服务 (管理页面)
+const publicDistPath = path.join(__dirname, '../public/dist');
+console.log(`[信息] 尝试服务静态文件路径: ${publicDistPath}`);
+
+if (fs.existsSync(publicDistPath)) {
+  console.log(`[信息] 管理页面静态文件目录找到: ${publicDistPath}`);
+  app.use(express.static(publicDistPath)); // 服务 public/dist 目录
+
+  // SPA 回退路由：对于非 API 的 GET 请求，返回 index.html
+  // 需要放在所有 API 路由之后
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith(config.apiPrefix || '/v1/') || req.path.startsWith('/api/')) {
+      return next(); // API 请求，交由后续路由处理或404
     }
-  })
-})
-
-const initConfig = async () => {
-  config.defaultHeaders = await getDefaultHeaders()
-  config.defaultCookie = await getDefaultCookie()
+    res.sendFile(path.join(publicDistPath, 'index.html'), (err) => {
+      if (err) {
+        console.error("[错误] 发送管理页面 index.html 失败:", err);
+        if (!res.headersSent) {
+          res.status(500).send('服务器内部错误，无法加载管理页面。');
+        }
+      }
+    });
+  });
+} else {
+  console.warn(`[警告] public/dist 目录不存在，管理页面可能无法访问。计算路径: ${publicDistPath}`);
+  app.get('/', (req, res) => { // 根路径提示
+    res.send('Qwen API服务正在运行。管理页面未找到。');
+  });
 }
 
-initConfig()
+// 全局错误处理中间件
+app.use((err, req, res, next) => {
+  console.error("全局错误处理器捕获到错误:", err.stack);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(500).send('服务器内部错误');
+});
 
-const startInfo = `
+// 初始化配置 (如默认请求头和 Cookie)
+const initConfig = async () => {
+  try {
+    config.defaultHeaders = await getDefaultHeaders();
+    config.defaultCookie = await getDefaultCookie();
+  } catch (error) {
+    console.error("初始化配置失败:", error);
+  }
+};
+
+initConfig().then(() => {
+  const listenAddress = config.listenAddress || '0.0.0.0';
+  const listenPort = config.listenPort;
+  const startInfo = `
 -------------------------------------------------------------------
-监听地址：${process.env.LISTEN_ADDRESS ? process.env.LISTEN_ADDRESS : 'localhost'}
-服务端口：${config.listenPort}
-接口路径：${config.apiPrefix ? config.apiPrefix : '未设置'}
+监听地址：${listenAddress}
+服务端口：${listenPort}
+API 主机: http://${listenAddress === '0.0.0.0' ? 'localhost' : listenAddress}:${listenPort} (从容器外部访问请使用正确的IP或域名)
+接口路径：${config.apiPrefix || '/v1'} (例如: ${config.apiPrefix || '/v1'}/chat/completions, ${config.apiPrefix || '/v1'}/files/upload)
+管理接口路径: /api (例如: /api/settings)
 思考输出：${config.outThink ? '开启' : '关闭'}
 搜索显示：${config.searchInfoMode === 'table' ? '表格' : '文本'}
 数据保存模式：${config.dataSaveMode}
@@ -68,16 +122,12 @@ Tips：如果你是因为报错而来看日志的，那么建议看看下面几�
 2. 启动后发生聊天请求崩溃：
      - 请检查是否在面板中添加了账号，如果没有添加，可能会报错！！！
 3. 如果你有还有是有问题可以加电报群：
-     - https://t.me/nodejs_project
+     - https://t.me/nodejs_project (此为示例，非真实群组)
 -------------------------------------------------------------------
-`
-if (config.listenAddress) {
-  app.listen(config.listenPort, config.listenAddress, () => {
-    console.log(startInfo)
-  })
-} else {
-  app.listen(config.listenPort, () => {
-    console.log(startInfo)
-  })
-}
-
+`;
+  app.listen(listenPort, listenAddress, () => {
+    console.log(startInfo);
+  });
+}).catch(err => {
+    console.error("服务启动失败:", err);
+});
