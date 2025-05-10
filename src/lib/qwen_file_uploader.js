@@ -32,10 +32,6 @@ function getSimpleFileType(mimeType) {
  */
 async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken) {
   const requestId = uuid.v4();
-  // accountManager.getHeaders() 返回的可能包含完整的 "Bearer <token>"
-  // 而Python脚本中对 token 做了处理，如果以 "bearer " 开头则移除。
-  // 我们需要确保这里的 qwenAuthToken 是纯 token。
-  // accountManager.getAccountToken() 通常返回纯 token。
   const bearerToken = qwenAuthToken.startsWith('Bearer ') ? qwenAuthToken : `Bearer ${qwenAuthToken}`;
 
   const headers = {
@@ -43,29 +39,18 @@ async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken
     "Authorization": bearerToken,
     "x-request-id": requestId,
     "Content-Type": "application/json",
-    // 根据Python脚本，移除一些可能由 defaultHeaders 带来的冗余或冲突项，确保核心头部正确
-    // 例如，如果 defaultHeaders 中有 "Cookie"，而Python脚本中是可选的，这里需要决策
-    // 暂时以 accountManager.defaultHeaders 为基础，并确保 Authorization 和 Content-Type 正确
   };
-  // 清理一下，确保 Host 等关键头部来自 defaultHeaders
   delete headers.Host; // axios 会自动处理 Host
-  if (accountManager.defaultHeaders.Host) {
-      // Axios 通常不需要手动设置 Host，但如果Qwen API有特定要求，可以保留
-      // headers.Host = accountManager.defaultHeaders.Host;
-  }
-
 
   const payload = { filename, filesize, filetype: filetypeSimple };
 
   console.log(`[*] 正在向通义千问请求STS Token: ${GET_STS_TOKEN_URL}`);
-  console.log(`    请求体: ${JSON.stringify(payload)}`);
-  // console.log(`    请求头部 (部分): ${JSON.stringify(Object.keys(headers))}`);
+  // console.log(`    请求体: ${JSON.stringify(payload)}`); // Production: Potentially sensitive, consider removing or logging at a higher level
 
   try {
     const response = await axios.post(GET_STS_TOKEN_URL, payload, { headers, timeout: 30000 });
     if (response.status === 200 && response.data) {
       console.log("[+] 已成功接收到STS Token和文件信息。");
-      // 确保返回的数据结构与Python脚本中提取的一致
       const stsDataFull = response.data;
       const credentials = {
         access_key_id: stsDataFull.access_key_id,
@@ -95,7 +80,7 @@ async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken
     if (error.response && error.response.status === 403) {
         console.error("[!] 收到 403 Forbidden 错误。可能需要检查请求头或Token权限。");
     }
-    throw error; // 将错误继续抛出，由调用者处理
+    throw error;
   }
 }
 
@@ -110,9 +95,9 @@ async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken
  */
 async function uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileContentTypeFull) {
   console.log("[*] 正在尝试使用 ali-oss SDK 将文件上传到阿里云OSS...");
-  console.log(`    目标存储桶 (Bucket): ${ossInfo.bucket}`);
-  console.log(`    对象键 (Object Key/Path): ${ossInfo.path}`);
-  console.log(`    OSS接入点 (Endpoint for ali-oss): ${ossInfo.endpoint}`);
+  // console.log(`    目标存储桶 (Bucket): ${ossInfo.bucket}`); // Debug level, can be removed for prod
+  // console.log(`    对象键 (Object Key/Path): ${ossInfo.path}`); // Debug level
+  // console.log(`    OSS接入点 (Endpoint for ali-oss): ${ossInfo.endpoint}`); // Debug level
 
   try {
     const client = new OSS({
@@ -120,7 +105,7 @@ async function uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileConte
       accessKeySecret: stsCredentials.access_key_secret,
       stsToken: stsCredentials.security_token,
       bucket: ossInfo.bucket,
-      endpoint: ossInfo.endpoint, // 例如 'oss-cn-hangzhou.aliyuncs.com'
+      endpoint: ossInfo.endpoint,
       secure: true, // 始终使用 HTTPS
     });
 
@@ -176,7 +161,6 @@ async function uploadFileToQwenOss(fileBuffer, originalFilename, qwenAuthToken) 
 
 module.exports = {
   uploadFileToQwenOss,
-  // 如果需要单独测试或使用，也可以导出其他辅助函数
-  // requestStsToken,
-  // uploadToOssWithSts
+  // requestStsToken, // Not typically exported unless needed for specific external use/testing
+  // uploadToOssWithSts // Same as above
 };
