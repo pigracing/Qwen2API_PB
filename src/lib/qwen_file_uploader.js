@@ -1,0 +1,182 @@
+// lib/qwen_file_uploader.js
+/**
+ * 该模块负责处理文件上传到阿里云OSS，使用从通义千问API获取的STS Token。
+ * 主要用于多模态聊天中，在聊天前先将图片上传，获取可供引用的URL。
+ */
+const axios = require('axios');
+const OSS = require('ali-oss'); // 需要安装: npm install ali-oss
+const uuid = require('uuid');
+const accountManager = require('./account'); // 用于获取通义千问认证的Token和Headers
+const mimetypes = require('mime-types'); // 需要安装: npm install mime-types
+
+const GET_STS_TOKEN_URL = "https://chat.qwen.ai/api/v1/files/getstsToken";
+
+/**
+ * 从完整MIME类型获取简化的文件类型 (例如 "image", "video")。
+ * @param {string} mimeType - 完整的MIME类型 (例如 "image/png", "application/pdf")。
+ * @returns {string} 简化文件类型，默认为 "file"。
+ */
+function getSimpleFileType(mimeType) {
+  if (!mimeType) return "file";
+  return mimeType.split('/')[0] || "file";
+}
+
+/**
+ * 请求STS Token。
+ * @param {string} filename - 文件名。
+ * @param {number} filesize - 文件大小 (字节)。
+ * @param {string} filetypeSimple - 简化文件类型 (例如 "image")。
+ * @param {string} qwenAuthToken - 从 accountManager 获取的通义千问认证Token (不含 "Bearer ")。
+ * @returns {Promise<object>} STS Token响应数据。
+ * @throws {Error} 如果请求失败。
+ */
+async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken) {
+  const requestId = uuid.v4();
+  // accountManager.getHeaders() 返回的可能包含完整的 "Bearer <token>"
+  // 而Python脚本中对 token 做了处理，如果以 "bearer " 开头则移除。
+  // 我们需要确保这里的 qwenAuthToken 是纯 token。
+  // accountManager.getAccountToken() 通常返回纯 token。
+  const bearerToken = qwenAuthToken.startsWith('Bearer ') ? qwenAuthToken : `Bearer ${qwenAuthToken}`;
+
+  const headers = {
+    ...accountManager.defaultHeaders, // 使用 account.js 中定义的默认请求头
+    "Authorization": bearerToken,
+    "x-request-id": requestId,
+    "Content-Type": "application/json",
+    // 根据Python脚本，移除一些可能由 defaultHeaders 带来的冗余或冲突项，确保核心头部正确
+    // 例如，如果 defaultHeaders 中有 "Cookie"，而Python脚本中是可选的，这里需要决策
+    // 暂时以 accountManager.defaultHeaders 为基础，并确保 Authorization 和 Content-Type 正确
+  };
+  // 清理一下，确保 Host 等关键头部来自 defaultHeaders
+  delete headers.Host; // axios 会自动处理 Host
+  if (accountManager.defaultHeaders.Host) {
+      // Axios 通常不需要手动设置 Host，但如果Qwen API有特定要求，可以保留
+      // headers.Host = accountManager.defaultHeaders.Host;
+  }
+
+
+  const payload = { filename, filesize, filetype: filetypeSimple };
+
+  console.log(`[*] 正在向通义千问请求STS Token: ${GET_STS_TOKEN_URL}`);
+  console.log(`    请求体: ${JSON.stringify(payload)}`);
+  // console.log(`    请求头部 (部分): ${JSON.stringify(Object.keys(headers))}`);
+
+  try {
+    const response = await axios.post(GET_STS_TOKEN_URL, payload, { headers, timeout: 30000 });
+    if (response.status === 200 && response.data) {
+      console.log("[+] 已成功接收到STS Token和文件信息。");
+      // 确保返回的数据结构与Python脚本中提取的一致
+      const stsDataFull = response.data;
+      const credentials = {
+        access_key_id: stsDataFull.access_key_id,
+        access_key_secret: stsDataFull.access_key_secret,
+        security_token: stsDataFull.security_token
+      };
+      const fileInfo = {
+        url: stsDataFull.file_url, // 这是最终给大模型的URL
+        path: stsDataFull.file_path, // OSS对象路径
+        bucket: stsDataFull.bucketname,
+        endpoint: stsDataFull.region + ".aliyuncs.com", // OSS endpoint
+        id: stsDataFull.file_id // 通义千问文件ID
+      };
+
+      if (!credentials.access_key_id || !credentials.access_key_secret || !credentials.security_token ||
+          !fileInfo.url || !fileInfo.path || !fileInfo.bucket) {
+        console.error("[!] 从API响应中提取凭证或文件信息失败。响应数据:", stsDataFull);
+        throw new Error("获取到的STS凭证或文件信息不完整。");
+      }
+      return { credentials, file_info: fileInfo };
+    } else {
+      console.error(`[!] 获取STS Token失败。状态码: ${response.status}, 响应:`, response.data);
+      throw new Error(`获取STS Token失败，状态码: ${response.status}`);
+    }
+  } catch (error) {
+    console.error("[!] 请求或处理STS Token时发生错误:", error.response ? error.response.data : error.message);
+    if (error.response && error.response.status === 403) {
+        console.error("[!] 收到 403 Forbidden 错误。可能需要检查请求头或Token权限。");
+    }
+    throw error; // 将错误继续抛出，由调用者处理
+  }
+}
+
+/**
+ * 使用STS凭证将文件Buffer上传到阿里云OSS。
+ * @param {Buffer} fileBuffer - 文件内容的Buffer。
+ * @param {object} stsCredentials - STS凭证 (access_key_id, access_key_secret, security_token)。
+ * @param {object} ossInfo - OSS信息 (bucket, path, endpoint)。
+ * @param {string} fileContentTypeFull - 文件的完整MIME类型。
+ * @returns {Promise<void>}
+ * @throws {Error} 如果上传失败。
+ */
+async function uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileContentTypeFull) {
+  console.log("[*] 正在尝试使用 ali-oss SDK 将文件上传到阿里云OSS...");
+  console.log(`    目标存储桶 (Bucket): ${ossInfo.bucket}`);
+  console.log(`    对象键 (Object Key/Path): ${ossInfo.path}`);
+  console.log(`    OSS接入点 (Endpoint for ali-oss): ${ossInfo.endpoint}`);
+
+  try {
+    const client = new OSS({
+      accessKeyId: stsCredentials.access_key_id,
+      accessKeySecret: stsCredentials.access_key_secret,
+      stsToken: stsCredentials.security_token,
+      bucket: ossInfo.bucket,
+      endpoint: ossInfo.endpoint, // 例如 'oss-cn-hangzhou.aliyuncs.com'
+      secure: true, // 始终使用 HTTPS
+    });
+
+    const result = await client.put(ossInfo.path, fileBuffer, {
+      headers: { 'Content-Type': fileContentTypeFull }
+    });
+
+    if (result.res.status === 200) {
+      console.log(`[+] 文件已成功上传到OSS。ETag: ${result.etag}`);
+    } else {
+      console.error(`[!] ali-oss 上传文件失败，HTTP状态码: ${result.res.status}`, result);
+      throw new Error(`ali-oss 上传失败，状态码: ${result.res.status}`);
+    }
+  } catch (error) {
+    console.error("[!] 使用 ali-oss 上传到OSS时发生错误:", error);
+    throw error;
+  }
+}
+
+/**
+ * 完整的文件上传流程：获取STS Token -> 上传到OSS。
+ * @param {Buffer} fileBuffer - 图片文件的Buffer。
+ * @param {string} originalFilename - 原始文件名 (例如 "image.png")。
+ * @param {string} qwenAuthToken - 通义千问认证Token (纯token，不含Bearer)。
+ * @returns {Promise<{file_url: string, file_id: string, message: string}>} 包含上传后的URL、文件ID和成功消息。
+ * @throws {Error} 如果任何步骤失败。
+ */
+async function uploadFileToQwenOss(fileBuffer, originalFilename, qwenAuthToken) {
+  const filesize = fileBuffer.length;
+  const mimeType = mimetypes.lookup(originalFilename) || 'application/octet-stream';
+  const filetypeSimple = getSimpleFileType(mimeType);
+
+  console.log(`[*] 开始上传文件: ${originalFilename}, 大小: ${filesize}, 类型: ${mimeType}, 简化类型: ${filetypeSimple}`);
+
+  if (!qwenAuthToken) {
+    throw new Error("通义千问认证Token (qwenAuthToken) 未提供。");
+  }
+
+  // 1. 请求STS Token
+  const stsData = await requestStsToken(originalFilename, filesize, filetypeSimple, qwenAuthToken);
+  const { credentials, file_info } = stsData;
+
+  // 2. 上传到OSS
+  await uploadToOssWithSts(fileBuffer, credentials, file_info, mimeType);
+
+  console.log(`[成功] 文件上传流程完成。CDN URL: ${file_info.url}`);
+  return {
+    file_url: file_info.url,
+    file_id: file_info.id, // 通义千问返回的文件ID
+    message: "文件上传成功"
+  };
+}
+
+module.exports = {
+  uploadFileToQwenOss,
+  // 如果需要单独测试或使用，也可以导出其他辅助函数
+  // requestStsToken,
+  // uploadToOssWithSts
+};
