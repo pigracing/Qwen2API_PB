@@ -103,7 +103,7 @@ const initConfig = async () => {
 };
 
 initConfig().then(() => {
-  const listenAddress = config.listenAddress || '0.0.0.0';
+  const listenAddress = config.listenAddress || 'localhost';
   const listenPort = config.listenPort;
   const startInfo = `
 -------------------------------------------------------------------
