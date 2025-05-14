@@ -103,13 +103,13 @@ const initConfig = async () => {
 };
 
 initConfig().then(() => {
-  const listenAddress = config.listenAddress || 'localhost';
+  const listenAddress = config.listenAddress || '0.0.0.0';
   const listenPort = config.listenPort;
   const startInfo = `
 -------------------------------------------------------------------
 监听地址：${listenAddress}
 服务端口：${listenPort}
-API 主机: http://${listenAddress === '0.0.0.0' ? 'localhost' : listenAddress}:${listenPort} (从容器外部访问请使用正确的IP或域名)
+API 主机: http://${listenAddress === '0.0.0.0' ? '0.0.0.0' : listenAddress}:${listenPort} (从容器外部访问请使用正确的IP或域名)
 接口路径：${config.apiPrefix || '/v1'} (例如: ${config.apiPrefix || '/v1'}/chat/completions, ${config.apiPrefix || '/v1'}/files/upload)
 管理接口路径: /api (例如: /api/settings)
 思考输出：${config.outThink ? '开启' : '关闭'}
