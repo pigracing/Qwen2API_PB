@@ -44,13 +44,10 @@ async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken
 
   const payload = { filename, filesize, filetype: filetypeSimple };
 
-  console.log(`[*] 正在向通义千问请求STS Token: ${GET_STS_TOKEN_URL}`);
-  // console.log(`    请求体: ${JSON.stringify(payload)}`); // Production: Potentially sensitive, consider removing or logging at a higher level
-
   try {
     const response = await axios.post(GET_STS_TOKEN_URL, payload, { headers, timeout: 30000 });
     if (response.status === 200 && response.data) {
-      console.log("[+] 已成功接收到STS Token和文件信息。");
+      // console.log("[+] 已成功接收到STS Token和文件信息。");
       const stsDataFull = response.data;
       const credentials = {
         access_key_id: stsDataFull.access_key_id,
@@ -94,10 +91,6 @@ async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken
  * @throws {Error} 如果上传失败。
  */
 async function uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileContentTypeFull) {
-  console.log("[*] 正在尝试使用 ali-oss SDK 将文件上传到阿里云OSS...");
-  // console.log(`    目标存储桶 (Bucket): ${ossInfo.bucket}`); // Debug level, can be removed for prod
-  // console.log(`    对象键 (Object Key/Path): ${ossInfo.path}`); // Debug level
-  // console.log(`    OSS接入点 (Endpoint for ali-oss): ${ossInfo.endpoint}`); // Debug level
 
   try {
     const client = new OSS({
@@ -114,7 +107,7 @@ async function uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileConte
     });
 
     if (result.res.status === 200) {
-      console.log(`[+] 文件已成功上传到OSS。ETag: ${result.etag}`);
+      // console.log(`[+] 文件已成功上传到OSS。ETag: ${result.etag}`);
     } else {
       console.error(`[!] ali-oss 上传文件失败，HTTP状态码: ${result.res.status}`, result);
       throw new Error(`ali-oss 上传失败，状态码: ${result.res.status}`);
@@ -138,7 +131,7 @@ async function uploadFileToQwenOss(fileBuffer, originalFilename, qwenAuthToken) 
   const mimeType = mimetypes.lookup(originalFilename) || 'application/octet-stream'
   const filetypeSimple = getSimpleFileType(mimeType)
 
-  console.log(`[*] 开始上传文件: ${originalFilename}, 大小: ${filesize}, 类型: ${mimeType}, 简化类型: ${filetypeSimple}`)
+  // console.log(`[*] 开始上传文件: ${originalFilename}, 大小: ${filesize}, 类型: ${mimeType}, 简化类型: ${filetypeSimple}`)
 
   if (!qwenAuthToken) {
     throw new Error("通义千问认证Token (qwenAuthToken) 未提供。")
@@ -151,7 +144,7 @@ async function uploadFileToQwenOss(fileBuffer, originalFilename, qwenAuthToken) 
   // 2. 上传到OSS
   await uploadToOssWithSts(fileBuffer, credentials, file_info, mimeType)
 
-  console.log(`[成功] 文件上传流程完成。CDN URL: ${file_info.url}`)
+  // console.log(`[成功] 文件上传流程完成。CDN URL: ${file_info.url}`)
   return {
     file_url: file_info.url,
     file_id: file_info.id,

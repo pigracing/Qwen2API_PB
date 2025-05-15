@@ -93,7 +93,6 @@ const parserMessages = async (messages, thinking_config, chat_type) => {
                      imgCacheManager.addCache(signature, uploadResult.file_url)
                   }
                 }
-                console.log("处理图片", item)
               } catch (error) {
                 console.error('图片上传失败:', error)
               }
