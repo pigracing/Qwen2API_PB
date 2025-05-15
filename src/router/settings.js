@@ -32,48 +32,6 @@ router.post('/setApiKey', apiKeyVerify, async (req, res) => {
   }
 })
 
-// 更新默认请求头
-router.post('/setHeaders', apiKeyVerify, async (req, res) => {
-  try {
-    const { headers } = req.body
-    if (!headers || typeof headers !== 'object') {
-      return res.status(400).json({ error: '无效的请求头格式' })
-    }
-
-    const success = await saveDefaultHeaders(headers)
-    if (success) {
-      config.defaultHeaders = headers
-      res.json({ message: '默认请求头更新成功', headers })
-    } else {
-      res.status(500).json({ error: '默认请求头更新失败' })
-    }
-  } catch (error) {
-    console.error('更新默认请求头失败:', error)
-    res.status(500).json({ error: error.message })
-  }
-})
-
-// 更新默认Cookie
-router.post('/setCookie', apiKeyVerify, async (req, res) => {
-  try {
-    const { cookie } = req.body
-    if (!cookie) {
-      return res.status(400).json({ error: 'Cookie不能为空' })
-    }
-
-    const success = await saveDefaultCookie(cookie)
-    if (success) {
-      config.defaultCookie = cookie
-      res.json({ message: '默认Cookie更新成功', cookie })
-    } else {
-      res.status(500).json({ error: '默认Cookie更新失败' })
-    }
-  } catch (error) {
-    console.error('更新默认Cookie失败:', error)
-    res.status(500).json({ error: error.message })
-  }
-})
-
 // 更新自动刷新设置
 router.post('/setAutoRefresh', apiKeyVerify, async (req, res) => {
   try {

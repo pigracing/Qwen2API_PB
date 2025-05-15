@@ -1,13 +1,14 @@
 const express = require('express')
 const router = express.Router()
 const uuid = require('uuid')
-const { uploadImage } = require('../lib/upload.js')
-const { isJson } = require('../lib/tools.js')
+const { uploadFileToQwenOss } = require('../lib/upload.js')
+const { isJson, sha256Encrypt } = require('../lib/tools.js')
 const { sendChatRequest } = require('../lib/request.js')
 const accountManager = require('../lib/account.js')
 const config = require('../config.js')
 const { apiKeyVerify } = require('../router/index.js')
-
+const CacheManager = require('../lib/imgCaches.js')
+const imgCacheManager = new CacheManager()
 
 const isChatType = (model, search) => {
   if (model.includes('-search') || search) {
@@ -49,11 +50,11 @@ const parserModel = (model) => {
   }
 }
 
-const parserMessages = (messages, thinking_config, chat_type) => {
+const parserMessages = async (messages, thinking_config, chat_type) => {
   try {
-
     const feature_config = thinking_config
-    messages.forEach(message => {
+
+    for (let message of messages) {
       if (message.role === 'user' || message.role === 'assistant') {
         message.chat_type = "t2t"
         message.extra = {}
@@ -61,8 +62,55 @@ const parserMessages = (messages, thinking_config, chat_type) => {
           "output_schema": "phase",
           "thinking_enabled": false,
         }
+        if (!Array.isArray(message.content)) continue
+        for (let item of message.content) {
+          if (item.type === 'image' || item.type === 'image_url') {
+            let base64 = null
+            if (item.type === 'image_url') {
+              base64 = item.image_url.url
+            }
+            if (base64) {
+              const regex = /data:(.+);base64,/
+              // 截取文本
+              const fileType = base64.match(regex)
+              const fileExtension = fileType && fileType[1] ? fileType[1].split('/')[1] || 'png' : 'png'
+              const filename = `${uuid.v4()}.${fileExtension}`
+              base64 = base64.replace(regex, '')
+              const signature = sha256Encrypt(base64)
+              try {
+                const buffer = Buffer.from(base64, 'base64')
+                const cacheIsExist = imgCacheManager.cacheIsExist(signature)
+                if (cacheIsExist) {
+                  delete item.image_url
+                  item.type = 'image'
+                  item.image = imgCacheManager.getCache(signature).url
+                } else {
+                  const uploadResult = await uploadFileToQwenOss(buffer, filename, accountManager.getAccountToken())
+                  if (uploadResult && uploadResult.status === 200) {
+                    delete item.image_url
+                    item.type = 'image'
+                    item.image = uploadResult.file_url
+                     imgCacheManager.addCache(signature, uploadResult.file_url)
+                  }
+                }
+                console.log("处理图片", item)
+              } catch (error) {
+                console.error('图片上传失败:', error)
+              }
+            }
+          } else if (item.type === 'text') {
+            item.chat_type = 't2t'
+            item.feature_config = {
+              "output_schema": "phase",
+              "thinking_enabled": false,
+            }
+          } else if (item.type === 'file') {
+
+          }
+
+        }
       }
-    })
+    }
 
     messages[messages.length - 1].feature_config = feature_config
     messages[messages.length - 1].chat_type = chat_type
@@ -84,7 +132,7 @@ const parserMessages = (messages, thinking_config, chat_type) => {
   }
 }
 
-const markBody = (req, res, next) => {
+const markBody = async (req, res, next) => {
   try {
 
     // 构建请求体
@@ -125,13 +173,14 @@ const markBody = (req, res, next) => {
     // 处理 model 参数 : 模型
     body.model = parserModel(model)
     // 处理 messages 参数 : 消息历史
-    body.messages = parserMessages(messages, isThinkingEnabled(model, enable_thinking, thinking_budget), body.chat_type)
+    body.messages = await parserMessages(messages, isThinkingEnabled(model, enable_thinking, thinking_budget), body.chat_type)
+    // 处理 enable_thinking 参数 : 是否启用思考
     req.enable_thinking = isThinkingEnabled(model, enable_thinking, thinking_budget).enabled
     // 处理 sub_chat_type 参数 : 子聊天类型
     body.sub_chat_type = body.chat_type
 
-
     req.body = body
+
     next()
   } catch (e) {
     console.log(e)
@@ -150,14 +199,36 @@ const streamResponse = async (res, response, enable_thinking, enable_web_search)
     let web_search_info = null
     let thinking_start = false
     let thinking_end = false
+    let buffer = ''
 
     response.on('data', async (chunk) => {
       const decodeText = decoder.decode(chunk, { stream: true })
-      // console.log(decodeText)
-      const lists = decodeText.split('\n').filter(item => item.trim() !== '')
-      for (const item of lists) {
+      buffer += decodeText
+
+      const chunks = []
+      let startIndex = 0
+
+      while (true) {
+        const dataStart = buffer.indexOf('data: ', startIndex)
+        if (dataStart === -1) break
+
+        const dataEnd = buffer.indexOf('\n\n', dataStart)
+        if (dataEnd === -1) break
+
+        const dataChunk = buffer.substring(dataStart, dataEnd).trim()
+        chunks.push(dataChunk)
+
+        startIndex = dataEnd + 2
+      }
+
+      if (startIndex > 0) {
+        buffer = buffer.substring(startIndex)
+      }
+
+      for (const item of chunks) {
         try {
-          let decodeJson = isJson(item.replace("data: ", '')) ? JSON.parse(item.replace("data: ", '')) : null
+          let dataContent = item.replace("data: ", '')
+          let decodeJson = isJson(dataContent) ? JSON.parse(dataContent) : null
           if (decodeJson === null || !decodeJson.choices || decodeJson.choices.length === 0) {
             continue
           }
@@ -209,24 +280,29 @@ const streamResponse = async (res, response, enable_thinking, enable_web_search)
     })
 
     response.on('end', async () => {
-      if ((config.outThink === false || !enable_thinking) && web_search_info) {
-        const webSearchTable = await accountManager.generateMarkdownTable(web_search_info, config.searchInfoMode || "text")
-        res.write(`data: ${JSON.stringify({
-          "id": `chatcmpl-${id}`,
-          "object": "chat.completion.chunk",
-          "created": new Date().getTime(),
-          "choices": [
-            {
-              "index": 0,
-              "delta": {
-                "content": `\n\n---\n${web_search_info}`
+      try {
+        if ((config.outThink === false || !enable_thinking) && web_search_info && config.searchInfoMode === "text") {
+          const webSearchTable = await accountManager.generateMarkdownTable(web_search_info, "text")
+          res.write(`data: ${JSON.stringify({
+            "id": `chatcmpl-${message_id}`,
+            "object": "chat.completion.chunk",
+            "created": new Date().getTime(),
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": `\n\n---\n${webSearchTable}`
+                }
               }
-            }
-          ]
-        })}\n\n`)
+            ]
+          })}\n\n`)
+        }
+        res.write(`data: [DONE]\n\n`)
+        res.end()
+      } catch (e) {
+        console.log(e)
+        res.status(500).json({ error: "服务错误!!!" })
       }
-      res.write(`data: [DONE]\n\n`)
-      res.end()
     })
   } catch (error) {
     console.log(error)

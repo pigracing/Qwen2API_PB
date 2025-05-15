@@ -1,6 +1,6 @@
 {
   "name": "qwen2api",
-  "version": "2025.05.03.21.00",
+  "version": "2025.05.15.18.00",
   "main": "index.js",
   "scripts": {
     "start": "node src/server.js",
@@ -11,6 +11,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "ali-oss": "^6.22.0",
     "axios": "^1.7.9",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
@@ -19,6 +20,8 @@
     "form-data": "^4.0.2",
     "ioredis": "^5.6.1",
     "jwt-decode": "^4.0.0",
+    "mime-types": "^3.0.1",
+    "multer": "^1.4.5-lts.1",
     "nodemon": "^3.1.7",
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.1",

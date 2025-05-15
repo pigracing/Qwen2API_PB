@@ -31,3 +31,5 @@ services:
       - DATA_SAVE_MODE=none
       # 账号
       - ACCOUNTS=
+      # 图片缓存
+      - CACHE_MODE=default

@@ -20,28 +20,6 @@
               class="w-full mt-2 bg-black text-white rounded-lg py-2 hover:bg-white hover:text-black border border-black transition-all duration-300">保存</button>
           </div>
         </div>
-        <!-- Headers -->
-        <div class="setting-card relative overflow-hidden rounded-2xl p-6 flex flex-col gap-4">
-          <div class="absolute inset-0 bg-white/30 backdrop-blur-md border border-white/30 rounded-2xl"></div>
-          <div class="relative flex flex-col gap-2">
-            <label class="text-gray-700 font-semibold">📋 默认Headers</label>
-            <textarea v-model="settings.defaultHeaders" rows="4"
-              class="mt-1 block w-full rounded-xl border-gray-300 bg-white/60 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all duration-300 text-base px-4 py-3 resize-none"></textarea>
-            <button @click="saveHeaders"
-              class="w-full mt-2 bg-black text-white rounded-lg py-2 hover:bg-white hover:text-black border border-black transition-all duration-300">保存</button>
-          </div>
-        </div>
-        <!-- Cookie -->
-        <div class="setting-card relative overflow-hidden rounded-2xl p-6 flex flex-col gap-4">
-          <div class="absolute inset-0 bg-white/30 backdrop-blur-md border border-white/30 rounded-2xl"></div>
-          <div class="relative flex flex-col gap-2">
-            <label class="text-gray-700 font-semibold">🍪 默认Cookie</label>
-            <input v-model="settings.defaultCookie" type="text"
-              class="mt-1 block w-full rounded-xl border-gray-300 bg-white/60 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 transition-all duration-300 h-12 text-base px-4">
-            <button @click="saveCookie"
-              class="w-full mt-2 bg-black text-white rounded-lg py-2 hover:bg-white hover:text-black border border-black transition-all duration-300">保存</button>
-          </div>
-        </div>
         <!-- 自动刷新 -->
         <div class="setting-card relative overflow-hidden rounded-2xl p-6 flex flex-col gap-4">
           <div class="absolute inset-0 bg-white/30 backdrop-blur-md border border-white/30 rounded-2xl"></div>
@@ -133,33 +111,6 @@ const saveApiKey = async () => {
     alert('API Key保存成功')
   } catch (error) {
     alert('API Key保存失败: ' + error.message)
-  }
-}
-const saveHeaders = async () => {
-  try {
-    try {
-      JSON.parse(settings.value.defaultHeaders)
-    } catch (e) {
-      alert('Headers格式不正确，请检查JSON格式')
-      return
-    }
-
-    await axios.post('/api/setHeaders', { headers: JSON.parse(settings.value.defaultHeaders) }, {
-      headers: { 'Authorization': localStorage.getItem('apiKey') || '' }
-    })
-    alert('Headers保存成功')
-  } catch (error) {
-    alert('Headers保存失败: ' + error.message)
-  }
-}
-const saveCookie = async () => {
-  try {
-    await axios.post('/api/setCookie', { cookie: settings.value.defaultCookie }, {
-      headers: { 'Authorization': localStorage.getItem('apiKey') || '' }
-    })
-    alert('Cookie保存成功')
-  } catch (error) {
-    alert('Cookie保存失败: ' + error.message)
   }
 }
 const saveAutoRefresh = async () => {

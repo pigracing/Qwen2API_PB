@@ -149,18 +149,8 @@ class Account {
       if (newToken) {
         const decoded = JwtDecode(newToken)
         const now = Math.floor(Date.now() / 1000)
-
-        // 找到并更新令牌
-        const index = this.accountTokens.findIndex(t => t.email === token.email)
-        if (index !== -1) {
-          this.accountTokens[index] = {
-            ...token,
-            token: newToken,
-            expires: decoded.exp,
-          }
-          console.log(`刷新令牌成功: ${token.email} (还有${Math.round((decoded.exp - now) / 3600)}小时过期)`)
-          return true
-        }
+        saveAccounts(token.email, token.password, newToken, decoded.exp)
+        console.log(`刷新令牌成功: ${token.email} (还有${Math.round((decoded.exp - now) / 3600)}小时过期)`)
       }
     } catch (error) {
       console.error(`刷新令牌失败 (${token.email}):`, error.message)
@@ -248,21 +238,6 @@ class Account {
 
   getAllAccountKeys() {
     return this.accountTokens
-  }
-
-  getHeaders() {
-    const token = this.getAccountToken()
-    const headers = {
-      ...this.defaultHeaders,
-      "authorization": `Bearer ${token}`,
-      "cookie": this.getCookie(token)
-    }
-
-    return headers
-  }
-
-  getCookie(token) {
-    return `token=${token}; ${config.defaultCookie}`
   }
 
   async login(email, password) {

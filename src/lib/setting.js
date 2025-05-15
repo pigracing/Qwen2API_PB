@@ -4,68 +4,6 @@ const fs = require('fs').promises
 const path = require('path')
 const accountManager = require('./account')
 
-const getDefaultHeaders = async () => {
-  if (config.dataSaveMode === "redis") {
-    try {
-      const headers = await redisClient.checkKeyExists('defaultHeaders')
-      if (headers) {
-        return JSON.parse(redisClient.get('defaultHeaders'))
-      } else {
-        await redisClient.set('defaultHeaders', JSON.stringify(config.defaultHeaders))
-        return config.defaultHeaders
-      }
-    } catch (error) {
-      return config.defaultHeaders
-    }
-  } else if (config.dataSaveMode === "file") {
-    try {
-      const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
-      if (Setting.defaultHeaders) {
-        return JSON.parse(Setting.defaultHeaders)
-      } else {
-        Setting.defaultHeaders = config.defaultHeaders
-        await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
-        return config.defaultHeaders
-      }
-    } catch (error) {
-      return config.defaultHeaders
-    }
-  } else {
-    return config.defaultHeaders
-  }
-}
-
-const getDefaultCookie = async () => {
-  if (config.dataSaveMode === "redis") {
-    try {
-      const cookie = await redisClient.checkKeyExists('defaultCookie')
-      if (cookie) {
-        return JSON.parse(redisClient.get('defaultCookie'))
-      } else {
-        await redisClient.set('defaultCookie', JSON.stringify(config.defaultCookie))
-        return config.defaultCookie
-      }
-    } catch (error) {
-      return config.defaultCookie
-    }
-  } else if (config.dataSaveMode === "file") {
-    try {
-      const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
-      if (Setting.defaultCookie) {
-        return Setting.defaultCookie
-      } else {
-        Setting.defaultCookie = config.defaultCookie
-        await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
-        return config.defaultCookie
-      }
-    } catch (error) {
-      return config.defaultCookie
-    }
-  } else {
-    return config.defaultCookie
-  }
-}
-
 const saveAccounts = async (email, password, token, expires) => {
   if (config.dataSaveMode === "redis") {
     try {
@@ -88,12 +26,18 @@ const saveAccounts = async (email, password, token, expires) => {
     try {
       const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
       if (Setting.accounts) {
-        Setting.accounts.push({
-          email,
-          password,
-          token,
-          expires
-        })
+        const isExist = Setting.accounts.find(item => item.email === email)
+        if (isExist) {
+          const index = Setting.accounts.findIndex(item => item.email === email)
+          Setting.accounts.splice(index, 1)
+        } else {
+          Setting.accounts.push({
+            email,
+            password,
+            token,
+            expires
+          })
+        }
         await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
         await accountManager.loadAccountTokens()
         return true
@@ -106,12 +50,18 @@ const saveAccounts = async (email, password, token, expires) => {
     }
   } else {
     try {
-      accountManager.accountTokens.push({
-        email,
-        password,
-        token,
-        expires
-      })
+      const isExist = accountManager.accountTokens.find(item => item.email === email)
+      if (isExist) {
+        const index = accountManager.accountTokens.findIndex(item => item.email === email)
+        accountManager.accountTokens.splice(index, 1)
+      } else {
+        accountManager.accountTokens.push({
+          email,
+          password,
+          token,
+          expires
+        })
+      }
       return true
     } catch (error) {
       return false
@@ -148,65 +98,7 @@ const deleteAccount = async (email) => {
   }
 }
 
-const saveDefaultHeaders = async (headers) => {
-  if (config.dataSaveMode === "redis") {
-    try {
-      await redisClient.set('defaultHeaders', JSON.stringify(headers))
-      config.defaultHeaders = headers
-      return true
-    } catch (error) {
-      return false
-    }
-  } else if (config.dataSaveMode === "file") {
-    try {
-      const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
-      Setting.defaultHeaders = headers
-      await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
-      config.defaultHeaders = headers
-      return true
-    } catch (error) {
-      return false
-    }
-  } else {
-    config.defaultHeaders = headers
-    return true
-  }
-}
-
-const saveDefaultCookie = async (cookie) => {
-  if (config.dataSaveMode === "redis") {
-    try {
-      await redisClient.set('defaultCookie', JSON.stringify(cookie))
-      config.defaultCookie = cookie
-      return true
-    } catch (error) {
-      return false
-    }
-  } else if (config.dataSaveMode === "file") {
-    try {
-      const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
-      if (Setting.defaultCookie) {
-        Setting.defaultCookie = cookie
-        await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
-        config.defaultCookie = cookie
-        return true
-      } else {
-        return false
-      }
-    } catch (error) {
-      return false
-    }
-  } else {
-    config.defaultCookie = cookie
-    return true
-  }
-}
-
 module.exports = {
-  getDefaultHeaders,
-  getDefaultCookie,
   saveAccounts,
-  deleteAccount,
-  saveDefaultHeaders,
-  saveDefaultCookie
+  deleteAccount
 }

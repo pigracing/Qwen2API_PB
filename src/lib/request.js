@@ -1,23 +1,19 @@
 const axios = require('axios')
-const uuid = require('uuid')
+const config = require('../config.js')
 const accountManager = require('./account.js')
 const { sleep } = require('./tools.js')
 
 const sendChatRequest = async (body) => {
 
-  if (accountManager) {
-    const models = await accountManager.getModels()
-    if (!models.includes(body.model)) {
-      body.model = 'qwen3-235b-a22b'
-    }
-  }
-
   try {
-    // console.log(JSON.stringify(body))
     const response = await axios.post('https://chat.qwen.ai/api/chat/completions',
       body,
       {
-        headers: accountManager.getHeaders(),
+        headers: {
+          'Authorization': `Bearer ${accountManager.getAccountToken()}`,
+          'Content-Type': 'application/json',
+          'Cookie': `ssxmod_itna=${config.ssxmodItna}`
+        },
         responseType: body.stream ? 'stream' : 'json'
       }
     )
@@ -26,8 +22,7 @@ const sendChatRequest = async (body) => {
       status: 200,
       response: response.data
     }
-  }
-  catch (error) {
+  }catch (error) {
     console.log("发送请求失败:", error.status || error.response.status || error.code)
     if (error.status === 429 || error.response.status === 429 || error.code === 429) {
       await sleep(1000)

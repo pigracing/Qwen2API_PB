@@ -5,13 +5,13 @@ const cors = require('cors')
 const app = express()
 const path = require('path')
 const fs = require('fs')
-const { getDefaultHeaders, getDefaultCookie } = require('./lib/setting')
 const modelsRouter = require('./router/models.js')
 const chatRouter = require('./router/chat.js')
 const imagesRouter = require('./router/images.js')
 const verifyRouter = require('./router/verify.js')
 const accountsRouter = require('./router/accounts.js')
 const settingsRouter = require('./router/settings.js')
+const fileUploadRouter = require('./router/upload.js')
 
 if (config.dataSaveMode === 'file') {
   if (!fs.existsSync(path.join(__dirname, '../data/data.json'))) {
@@ -34,7 +34,7 @@ app.use(imagesRouter)
 app.use(verifyRouter)
 app.use('/api', accountsRouter)
 app.use('/api', settingsRouter)
-
+app.use(fileUploadRouter)
 app.use(express.static(path.join(__dirname, '../public/dist')))
 app.get('*', (req, res) => {
   // 确保发送的是 public 目录下的 index.html
@@ -47,8 +47,7 @@ app.get('*', (req, res) => {
 })
 
 const initConfig = async () => {
-  config.defaultHeaders = await getDefaultHeaders()
-  config.defaultCookie = await getDefaultCookie()
+
 }
 
 initConfig()
