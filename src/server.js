@@ -79,4 +79,3 @@ if (config.listenAddress) {
     console.log(startInfo)
   })
 }
-
