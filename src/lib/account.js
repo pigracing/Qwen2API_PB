@@ -50,8 +50,34 @@ class Account {
         this.accountTokens = []
       }
     } else if (config.dataSaveMode === "file") {
-      const Setting = JSON.parse(await fs.readFile(path.join(__dirname, '../../data/data.json'), 'utf-8'))
       try {
+        const filePath = path.join(__dirname, '../../data/data.json')
+
+        // 检查文件是否存在
+        try {
+          await fs.access(filePath)
+        } catch (error) {
+          // 文件不存在，创建默认文件
+          console.log('数据文件不存在，正在创建默认文件...')
+
+          // 确保目录存在
+          const dirPath = path.dirname(filePath)
+          await fs.mkdir(dirPath, { recursive: true })
+
+          // 创建默认数据结构
+          const defaultData = {
+            "defaultHeaders": null,
+            "defaultCookie": null,
+            "accounts": []
+          }
+
+          await fs.writeFile(filePath, JSON.stringify(defaultData, null, 2), 'utf-8')
+          console.log('默认数据文件创建成功')
+        }
+
+        // 读取文件内容
+        const Setting = JSON.parse(await fs.readFile(filePath, 'utf-8'))
+
         if (Setting.accounts) {
           this.accountTokens = Setting.accounts
           console.log(`从文件中加载了 ${this.accountTokens.length} 个账户`)
@@ -59,6 +85,7 @@ class Account {
           this.accountTokens = []
         }
       } catch (error) {
+        console.error('加载账户信息失败:', error.message)
         this.accountTokens = []
       }
     } else {
@@ -186,8 +213,7 @@ class Account {
         "object": "model",
         "created": new Date().getTime(),
         "owned_by": "qwen"
-      })),
-      "object": "list"
+      }))
     }
     return models
   }
@@ -275,7 +301,7 @@ class Account {
 
 }
 
-if (!process.env.API_KEY) {
+if (!(process.env.API_KEY || config.apiKey)) {
   console.log('请务必设置 API_KEY 环境变量')
   process.exit(1)
 }
