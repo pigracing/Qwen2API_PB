@@ -19,6 +19,7 @@ class Account {
 
     this.currentIndex = 0
     this.models = [
+      "qwen3-coder-plus",
       "qwen3-235b-a22b",
       "qwen3-30b-a3b",
       "qwen3-32b",
