@@ -30,14 +30,14 @@ const saveAccounts = async (email, password, token, expires) => {
         if (isExist) {
           const index = Setting.accounts.findIndex(item => item.email === email)
           Setting.accounts.splice(index, 1)
-        } else {
-          Setting.accounts.push({
-            email,
-            password,
-            token,
-            expires
-          })
         }
+        // 无论是否存在，都要添加新的账户信息
+        Setting.accounts.push({
+          email,
+          password,
+          token,
+          expires
+        })
         await fs.writeFile(path.join(__dirname, '../../data/data.json'), JSON.stringify(Setting, null, 2))
         await accountManager.loadAccountTokens()
         return true
@@ -54,14 +54,14 @@ const saveAccounts = async (email, password, token, expires) => {
       if (isExist) {
         const index = accountManager.accountTokens.findIndex(item => item.email === email)
         accountManager.accountTokens.splice(index, 1)
-      } else {
-        accountManager.accountTokens.push({
-          email,
-          password,
-          token,
-          expires
-        })
       }
+      // 无论是否存在，都要添加新的账户信息
+      accountManager.accountTokens.push({
+        email,
+        password,
+        token,
+        expires
+      })
       return true
     } catch (error) {
       return false

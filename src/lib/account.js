@@ -171,20 +171,78 @@ class Account {
 
   // 刷新单个令牌的方法
   async refreshSingleToken(token) {
-
     try {
       const newToken = await this.login(token.email, token.password)
       if (newToken) {
         const decoded = JwtDecode(newToken)
         const now = Math.floor(Date.now() / 1000)
-        saveAccounts(token.email, token.password, newToken, decoded.exp)
-        console.log(`刷新令牌成功: ${token.email} (还有${Math.round((decoded.exp - now) / 3600)}小时过期)`)
+        
+        // 直接更新内存中的token信息
+        const tokenIndex = this.accountTokens.findIndex(t => t.email === token.email)
+        if (tokenIndex !== -1) {
+          this.accountTokens[tokenIndex].token = newToken
+          this.accountTokens[tokenIndex].expires = decoded.exp
+        }
+        
+        // 根据配置保存到持久化存储
+        let saveResult = true
+        if (config.dataSaveMode === "redis") {
+          try {
+            saveResult = await redisClient.setAccount(token.email, {
+              password: token.password,
+              token: newToken,
+              expires: decoded.exp
+            })
+          } catch (error) {
+            console.error(`Redis保存失败: ${token.email}`, error.message)
+            saveResult = false
+          }
+        } else if (config.dataSaveMode === "file") {
+          try {
+            const filePath = path.join(__dirname, '../../data/data.json')
+            const Setting = JSON.parse(await fs.readFile(filePath, 'utf-8'))
+            
+            if (Setting.accounts) {
+              // 找到并更新现有账户，或添加新账户
+              const existingIndex = Setting.accounts.findIndex(item => item.email === token.email)
+              const updatedAccount = {
+                email: token.email,
+                password: token.password,
+                token: newToken,
+                expires: decoded.exp
+              }
+              
+              if (existingIndex !== -1) {
+                Setting.accounts[existingIndex] = updatedAccount
+              } else {
+                Setting.accounts.push(updatedAccount)
+              }
+              
+              await fs.writeFile(filePath, JSON.stringify(Setting, null, 2), 'utf-8')
+            } else {
+              saveResult = false
+            }
+          } catch (error) {
+            console.error(`文件保存失败: ${token.email}`, error.message)
+            saveResult = false
+          }
+        }
+        
+        if (saveResult) {
+          console.log(`刷新令牌成功: ${token.email} (还有${Math.round((decoded.exp - now) / 3600)}小时过期)`)
+          return true
+        } else {
+          console.error(`保存令牌失败: ${token.email}`)
+          return false
+        }
+      } else {
+        console.error(`获取新令牌失败: ${token.email}`)
+        return false
       }
     } catch (error) {
       console.error(`刷新令牌失败 (${token.email}):`, error.message)
+      return false
     }
-
-    return false
   }
 
   // 更新销毁方法，清除定时器
