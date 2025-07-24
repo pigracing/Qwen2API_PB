@@ -1,16 +1,17 @@
 const express = require('express')
 const router = express.Router()
 const uuid = require('uuid')
-const { uploadFileToQwenOss } = require('../lib/upload.js')
-const { isJson, sha256Encrypt } = require('../lib/tools.js')
-const { sendChatRequest } = require('../lib/request.js')
-const accountManager = require('../lib/account.js')
-const config = require('../config.js')
-const { apiKeyVerify } = require('../router/index.js')
-const CacheManager = require('../lib/imgCaches.js')
+const { uploadFileToQwenOss } = require('../utils/upload.js')
+const { isJson, sha256Encrypt } = require('../utils/tools.js')
+const { sendChatRequest } = require('../utils/request.js')
+const accountManager = require('../utils/account.js')
+const config = require('../config/index.js')
+const { apiKeyVerify } = require('../middlewares/authorization.js')
+const CacheManager = require('../utils/imgCaches.js')
 const imgCacheManager = new CacheManager()
 
 const isChatType = (model, search) => {
+  if (!model) return 't2t'
   if (model.includes('-search') || search) {
     return 'search'
   } else {
@@ -26,6 +27,8 @@ const isThinkingEnabled = (model, enable_thinking, thinking_budget) => {
     "thinking_budget": 38912
   }
 
+  if (!model) return thinking_config
+
   if (model.includes('-thinking') || enable_thinking) {
     thinking_config.thinking_enabled = true
   }
@@ -38,7 +41,7 @@ const isThinkingEnabled = (model, enable_thinking, thinking_budget) => {
 }
 
 const parserModel = (model) => {
-  if (!model) return 'qwen3-235b-a22b'
+  if (!model) return 'qwen3-coder-plus'
 
   try {
     model = String(model)
@@ -46,7 +49,7 @@ const parserModel = (model) => {
     model = model.replace('-thinking', '')
     return model
   } catch (e) {
-    return 'qwen3-235b-a22b'
+    return 'qwen3-coder-plus'
   }
 }
 
@@ -62,7 +65,11 @@ const parserMessages = async (messages, thinking_config, chat_type) => {
           "output_schema": "phase",
           "thinking_enabled": false,
         }
+
         if (!Array.isArray(message.content)) continue
+
+        const newContent = []
+
         for (let item of message.content) {
           if (item.type === 'image' || item.type === 'image_url') {
             let base64 = null
@@ -77,6 +84,7 @@ const parserMessages = async (messages, thinking_config, chat_type) => {
               const filename = `${uuid.v4()}.${fileExtension}`
               base64 = base64.replace(regex, '')
               const signature = sha256Encrypt(base64)
+
               try {
                 const buffer = Buffer.from(base64, 'base64')
                 const cacheIsExist = imgCacheManager.cacheIsExist(signature)
@@ -84,15 +92,18 @@ const parserMessages = async (messages, thinking_config, chat_type) => {
                   delete item.image_url
                   item.type = 'image'
                   item.image = imgCacheManager.getCache(signature).url
+                  newContent.push(item)
                 } else {
                   const uploadResult = await uploadFileToQwenOss(buffer, filename, accountManager.getAccountToken())
                   if (uploadResult && uploadResult.status === 200) {
                     delete item.image_url
                     item.type = 'image'
                     item.image = uploadResult.file_url
-                     imgCacheManager.addCache(signature, uploadResult.file_url)
+                    imgCacheManager.addCache(signature, uploadResult.file_url)
+                    newContent.push(item)
                   }
                 }
+
               } catch (error) {
                 console.error('图片上传失败:', error)
               }
@@ -103,10 +114,38 @@ const parserMessages = async (messages, thinking_config, chat_type) => {
               "output_schema": "phase",
               "thinking_enabled": false,
             }
+
+            if (newContent.length >=2) {
+              message.push({
+                "role": "user",
+                "content": item.text,
+                "chat_type": "t2t",
+                "extra": {},
+                "feature_config": {
+                  "output_schema": "phase",
+                  "thinking_enabled": false,
+                }
+              })
+            }else{
+              newContent.push(item)
+            }
+
           } else if (item.type === 'file') {
 
           }
 
+        }
+      } else {
+        if (Array.isArray(message.content)) {
+          let system_prompt = ''
+          for (let item of message.content) {
+            if (item.type === 'text') {
+              system_prompt += item.text
+            }
+          }
+          if (system_prompt) {
+            message.content = system_prompt
+          }
         }
       }
     }

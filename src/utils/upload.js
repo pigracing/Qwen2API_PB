@@ -1,15 +1,9 @@
-// lib/qwen_file_uploader.js
-/**
- * 该模块负责处理文件上传到阿里云OSS，使用从通义千问API获取的STS Token。
- * 主要用于多模态聊天中，在聊天前先将图片上传，获取可供引用的URL。
- */
-const axios = require('axios');
-const OSS = require('ali-oss'); // 需要安装: npm install ali-oss
-const uuid = require('uuid');
-const accountManager = require('./account'); // 用于获取通义千问认证的Token和Headers
-const mimetypes = require('mime-types'); // 需要安装: npm install mime-types
+const OSS = require('ali-oss')
+const uuid = require('uuid')
+const accountManager = require('./account')
+const mimetypes = require('mime-types')
 
-const GET_STS_TOKEN_URL = "https://chat.qwen.ai/api/v1/files/getstsToken";
+const GET_STS_TOKEN_URL = "https://chat.qwen.ai/api/v1/files/getstsToken"
 
 /**
  * 从完整MIME类型获取简化的文件类型 (例如 "image", "video")。
@@ -35,12 +29,12 @@ async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken
   const bearerToken = qwenAuthToken.startsWith('Bearer ') ? qwenAuthToken : `Bearer ${qwenAuthToken}`;
 
   const headers = {
-    ...accountManager.defaultHeaders, // 使用 account.js 中定义的默认请求头
+    ...accountManager.defaultHeaders,
     "Authorization": bearerToken,
     "x-request-id": requestId,
     "Content-Type": "application/json",
-  };
-  delete headers.Host; // axios 会自动处理 Host
+  }
+  delete headers.Host
 
   const payload = { filename, filesize, filetype: filetypeSimple };
 

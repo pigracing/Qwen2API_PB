@@ -1,5 +1,5 @@
 const axios = require('axios')
-const config = require('../config.js')
+const config = require('../config/index.js')
 const accountManager = require('./account.js')
 const { sleep } = require('./tools.js')
 

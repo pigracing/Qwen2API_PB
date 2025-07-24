@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data:/app/data
+      - ./data/data.json:/app/data/data.json
     environment:
       # API 路径，不填则为空(http://localhost:3000)
       # 示例(/api) 则访问 http://localhost:3000/api
@@ -25,11 +25,11 @@ services:
       - SEARCH_INFO_MODE=table
       # 是否输出思考过程
       - OUTPUT_THINK=true
-      # redis 连接地址(必填)
+      # redis 连接地址(如果使用redis模式，则必填，当redis使用tls时将redis://替换为rediss://)
       - REDIS_URL=
       # 数据保存模式
       - DATA_SAVE_MODE=none
-      # 账号
+      # 账号(如果使用redis和file模式，则不需要填写)
       - ACCOUNTS=
       # 图片缓存
       - CACHE_MODE=default

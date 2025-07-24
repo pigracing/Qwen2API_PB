@@ -1,12 +1,17 @@
 const express = require('express')
 const router = express.Router()
-const redisClient = require('../lib/redis')
-const accountManager = require('../lib/account')
-const { JwtDecode } = require('../lib/tools')
-const { apiKeyVerify } = require('./index')
-const { deleteAccount, saveAccounts } = require('../lib/setting')
+const accountManager = require('../utils/account')
+const { JwtDecode } = require('../utils/tools')
+const { apiKeyVerify } = require('../middlewares/authorization')
+const { deleteAccount, saveAccounts } = require('../utils/setting')
 
-// 获取所有账号（分页）
+/**
+ * 获取所有账号（分页）
+ * 
+ * @param {number} page 页码
+ * @param {number} pageSize 每页数量
+ * @returns {Object} 账号列表
+ */
 router.get('/getAllAccounts', apiKeyVerify, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
@@ -42,7 +47,14 @@ router.get('/getAllAccounts', apiKeyVerify, async (req, res) => {
   }
 })
 
-// 添加账号
+/**
+ * POST /setAccount
+ * 添加账号
+ * 
+ * @param {string} email 邮箱
+ * @param {string} password 密码
+ * @returns {Object} 账号信息
+ */
 router.post('/setAccount', apiKeyVerify, async (req, res) => {
   try {
     const { email, password } = req.body
@@ -81,11 +93,16 @@ router.post('/setAccount', apiKeyVerify, async (req, res) => {
   }
 })
 
-// 删除账号
+/**
+ * DELETE /deleteAccount
+ * 删除账号
+ * 
+ * @param {string} email 邮箱
+ * @returns {Object} 账号信息
+ */
 router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
   try {
     const { email } = req.body
-    console.log(email)
 
     // 检查账号是否存在
     const exists = await accountManager.accountTokens.find(item => item.email === email)
@@ -108,7 +125,13 @@ router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
 })
 
 
-// 批量添加账号
+/**
+ * POST /setAccounts
+ * 批量添加账号
+ * 
+ * @param {string} accounts 账号列表
+ * @returns {Object} 账号信息
+ */
 router.post('/setAccounts', apiKeyVerify, async (req, res) => {
   try {
     let { accounts } = req.body
@@ -118,6 +141,7 @@ router.post('/setAccounts', apiKeyVerify, async (req, res) => {
 
     accounts = accounts.replace(/[\r]/g, '\n')
     accounts = accounts.split('\n').filter(item => item.trim() !== '')
+
     for (const account of accounts) {
       const [email, password] = account.split(':')
       if (!email || !password) {

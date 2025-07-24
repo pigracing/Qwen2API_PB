@@ -1,8 +1,8 @@
 const express = require('express')
 const router = express.Router()
 const config = require('../config')
-const { apiKeyVerify } = require('./index')
-const { saveDefaultHeaders, saveDefaultCookie } = require('../lib/setting')
+const { apiKeyVerify } = require('../middlewares/authorization')
+const { saveDefaultHeaders, saveDefaultCookie } = require('../utils/setting')
 
 
 router.get('/settings', apiKeyVerify, async (req, res) => {

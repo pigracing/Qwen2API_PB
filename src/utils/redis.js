@@ -1,5 +1,5 @@
 const Redis = require('ioredis')
-const config = require('../config.js')
+const config = require('../config/index.js')
 
 // 判断是否需要TLS
 const isTLS = config.redisURL && (config.redisURL.startsWith('rediss://') || config.redisURL.includes('--tls'))

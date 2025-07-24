@@ -27,9 +27,10 @@ services:
       - OUTPUT_THINK=true
       # redis 连接地址(必填)
       - REDIS_URL=redis://redis:6379
+      # 数据保存模式
       - DATA_SAVE_MODE=redis
       # 图片缓存
-      - CACHE_MODE=redis
+      - CACHE_MODE=default
   redis:
     image: redis:7.2-alpine
     container_name: redis_qwen2api

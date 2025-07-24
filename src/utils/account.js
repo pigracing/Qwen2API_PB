@@ -1,7 +1,7 @@
 const axios = require('axios')
 const { sha256Encrypt } = require('./tools')
 const { JwtDecode } = require('./tools')
-const config = require('../config.js')
+const config = require('../config/index.js')
 const redisClient = require('./redis')
 const fs = require('fs').promises
 const path = require('path')

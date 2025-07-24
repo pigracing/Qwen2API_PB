@@ -1,21 +1,19 @@
 const express = require('express')
 const bodyParser = require('body-parser')
-const config = require('./config.js')
+const config = require('./config/index.js')
 const cors = require('cors')
 const app = express()
 const path = require('path')
 const fs = require('fs')
-const modelsRouter = require('./router/models.js')
-const chatRouter = require('./router/chat.js')
-const imagesRouter = require('./router/images.js')
-const verifyRouter = require('./router/verify.js')
-const accountsRouter = require('./router/accounts.js')
-const settingsRouter = require('./router/settings.js')
-const fileUploadRouter = require('./router/upload.js')
+const modelsRouter = require('./routes/models.js')
+const chatRouter = require('./routes/chat.js')
+const verifyRouter = require('./routes/verify.js')
+const accountsRouter = require('./routes/accounts.js')
+const settingsRouter = require('./routes/settings.js')
 
 if (config.dataSaveMode === 'file') {
   if (!fs.existsSync(path.join(__dirname, '../data/data.json'))) {
-    fs.writeFileSync(path.join(__dirname, '../data/data.json'), JSON.stringify({ "defaultHeaders": null, "defaultCookie": null, "accounts": [] }, null, 2))
+    fs.writeFileSync(path.join(__dirname, '../data/data.json'), JSON.stringify({"accounts": [] }, null, 2))
   }
 }
 
@@ -30,14 +28,13 @@ app.use((err, req, res, next) => {
 // API路由
 app.use(modelsRouter)
 app.use(chatRouter)
-app.use(imagesRouter)
 app.use(verifyRouter)
 app.use('/api', accountsRouter)
 app.use('/api', settingsRouter)
-app.use(fileUploadRouter)
+
 app.use(express.static(path.join(__dirname, '../public/dist')))
+
 app.get('*', (req, res) => {
-  // 确保发送的是 public 目录下的 index.html
   res.sendFile(path.join(__dirname, '../public/dist/index.html'), (err) => {
     if (err) {
       console.error("管理页面加载失败", err)
@@ -46,11 +43,6 @@ app.get('*', (req, res) => {
   })
 })
 
-const initConfig = async () => {
-
-}
-
-initConfig()
 
 const startInfo = `
 -------------------------------------------------------------------
@@ -61,13 +53,7 @@ const startInfo = `
 搜索显示：${config.searchInfoMode === 'table' ? '表格' : '文本'}
 数据保存模式：${config.dataSaveMode}
 开源地址：https://github.com/Rfym21/Qwen2API
-Tips：如果你是因为报错而来看日志的，那么建议看看下面几条：
-1. 在环境变量中添加了账号但是启动失败，或无法获取到账号
-     - 在 2025.04.29.17.00 之后的版本，将不再支持将账号写入环境变量，请在运行成功后打开管理页面添加账号！！！
-2. 启动后发生聊天请求崩溃：
-     - 请检查是否在面板中添加了账号，如果没有添加，可能会报错！！！
-3. 如果你有还有是有问题可以加电报群：
-     - https://t.me/nodejs_project
+电报群聊：https://t.me/nodejs_project
 -------------------------------------------------------------------
 `
 if (config.listenAddress) {

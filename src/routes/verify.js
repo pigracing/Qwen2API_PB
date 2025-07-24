@@ -1,6 +1,6 @@
 const express = require('express')
 const router = express.Router()
-const config = require('../config.js')
+const config = require('../config/index.js')
 
 router.post('/verify', (req, res) => {
   const apiKey = req.body.apiKey
