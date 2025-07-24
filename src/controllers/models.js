@@ -1,4 +1,4 @@
-const ModelsMap = require('../models/ModelsMap.js')
+const ModelsMap = require('../models/models-map.js')
 
 const handleGetModels = async (req, res) => {
   const models = []

@@ -1,5 +1,6 @@
 const crypto = require('crypto')
 const { jwtDecode } = require('jwt-decode')
+const { logger } = require('./logger')
 
 
 const isJson = (str) => {
@@ -17,6 +18,7 @@ const sleep = async (ms) => {
 
 const sha256Encrypt = (text) => {
   if (typeof text !== 'string') {
+    logger.error('输入必须是字符串类型', 'TOOLS')
     throw new Error('输入必须是字符串类型')
   }
   const hash = crypto.createHash('sha256')
@@ -29,7 +31,7 @@ const JwtDecode = (token) => {
     const decoded = jwtDecode(token, { complete: true })
     return decoded
   } catch (error) {
-    console.error('解析JWT失败:', error.message)
+    logger.error('解析JWT失败', 'JWT', '', error)
     return null
   }
 }

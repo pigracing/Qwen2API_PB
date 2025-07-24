@@ -4,15 +4,32 @@
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 px-4 space-y-4 md:space-y-0 pt-5">
         <h1 class="text-4xl font-bold">Token Manager <span class="text-gray-500 text-sm">by 兜豆子</span></h1>
         <div class="flex flex-col sm:flex-row w-full md:w-auto space-y-3 sm:space-y-0 sm:space-x-4">
-          <button @click="showAddModal = true" 
+          <button @click="showAddModal = true"
                   class="action-button font-bold border border-green-200 bg-green-50 text-green-900 px-4 py-2 rounded-xl shadow-sm hover:bg-green-100 hover:border-green-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
             添加账号
           </button>
-          <button @click="exportAccounts" 
+          <button @click="refreshAllAccounts"
+                  :disabled="isRefreshingAll"
+                  :class="[
+                    'action-button font-bold px-4 py-2 rounded-xl shadow-sm transition-all duration-300 transform active:translate-y-0',
+                    isRefreshingAll
+                      ? 'bg-purple-400 text-white border-purple-400 refreshing-button-purple cursor-not-allowed transform-none'
+                      : 'macaron-purple-button text-purple-800 hover:-translate-y-1'
+                  ]">
+            <span v-if="isRefreshingAll" class="flex items-center space-x-2">
+              <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>刷新中...</span>
+            </span>
+            <span v-else>一键刷新</span>
+          </button>
+          <button @click="exportAccounts"
                   class="action-button font-bold border border-yellow-200 bg-yellow-50 text-yellow-900 px-4 py-2 rounded-xl shadow-sm hover:bg-yellow-100 hover:border-yellow-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
             导出账号
           </button>
-          <router-link to="/settings" 
+          <router-link to="/settings"
                        class="action-button font-bold border border-blue-200 bg-blue-50 text-blue-900 px-4 py-2 rounded-xl shadow-sm hover:bg-blue-100 hover:border-blue-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0 text-center">
             系统设置
           </router-link>
@@ -100,7 +117,7 @@
       </div>
 
       <!-- Token列表 -->
-      <div class="max-h-[calc(75vh)] overflow-y-auto pr-2">
+      <div class="max-h-[calc(75vh)] overflow-y-auto pr-2 scrollbar-hidden">
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
           <div v-for="token in displayedTokens" 
                :key="token.email" 
@@ -152,8 +169,25 @@
                 </div>
               </div>
               
-              <div class="pt-4 mt-auto border-t border-gray-200/50">
-                <button @click="deleteToken(token.email)" 
+              <div class="pt-4 mt-auto border-t border-gray-200/50 space-y-2">
+                <button @click="refreshToken(token.email)"
+                        :disabled="refreshingTokens.includes(token.email)"
+                        :class="[
+                          'w-full py-2 rounded-lg transition-all duration-300 flex items-center justify-center space-x-2',
+                          refreshingTokens.includes(token.email)
+                            ? 'bg-green-400 text-white refreshing-button-green cursor-not-allowed'
+                            : 'macaron-green-button text-green-600 hover:bg-green-100 border border-green-200'
+                        ]">
+                  <span v-if="refreshingTokens.includes(token.email)" class="flex items-center space-x-2">
+                    <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                      <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>刷新中...</span>
+                  </span>
+                  <span v-else>刷新令牌</span>
+                </button>
+                <button @click="deleteToken(token.email)"
                         class="w-full group-hover:bg-red-50 text-red-600 py-2 rounded-lg transition-all duration-300 hover:bg-red-100">
                   删除账号
                 </button>
@@ -241,6 +275,23 @@
         </transition>
       </div>
     </div>
+
+    <!-- Toast 通知 -->
+    <div v-if="toast.show"
+         :class="[
+           'fixed top-4 right-4 z-50 px-6 py-4 rounded-xl shadow-lg transform transition-all duration-300',
+           toast.type === 'success' ? 'bg-emerald-500 text-white' : 'bg-red-500 text-white'
+         ]">
+      <div class="flex items-center space-x-2">
+        <svg v-if="toast.type === 'success'" class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+        </svg>
+        <svg v-else class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>
+        <span>{{ toast.message }}</span>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -260,7 +311,7 @@ const batchAccounts = ref('')
 // 分页相关
 const allTokens = ref([])
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const totalItems = computed(() => allTokens.value.length)
 const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / pageSize.value)))
 
@@ -268,6 +319,17 @@ const totalPages = computed(() => Math.max(1, Math.ceil(totalItems.value / pageS
 const selectedTokens = ref([])
 const selectAll = ref(false)
 const showDeleteAllConfirm = ref(false)
+
+// 刷新相关
+const isRefreshingAll = ref(false)
+const refreshingTokens = ref([])
+
+// Toast 通知
+const toast = ref({
+  show: false,
+  message: '',
+  type: 'success'
+})
 
 const isSelected = (email) => {
   return selectedTokens.value.includes(email)
@@ -314,10 +376,10 @@ const deleteSelected = async () => {
     await getTokens()
     selectedTokens.value = []
     selectAll.value = false
-    alert('删除成功')
+    showToast('删除成功')
   } catch (error) {
     console.error('批量删除失败:', error)
-    alert('批量删除失败: ' + error.message)
+    showToast('批量删除失败: ' + error.message, 'error')
   }
 }
 
@@ -337,10 +399,10 @@ const deleteAllAccounts = async () => {
     await getTokens()
     selectedTokens.value = []
     selectAll.value = false
-    alert('所有账号已删除')
+    showToast('所有账号已删除')
   } catch (error) {
     console.error('删除所有账号失败:', error)
-    alert('删除所有账号失败: ' + error.message)
+    showToast('删除所有账号失败: ' + error.message, 'error')
   }
 }
 
@@ -362,59 +424,58 @@ const changePage = (page) => {
 
 const changePageSize = () => {
   currentPage.value = 1
-  if (pageSize.value >= 1000) {
-    // 当选择"全部"时，无需分页请求
-    tokens.value = allTokens.value
-  } else {
-    getTokens()
-  }
+  // 重置选择状态
+  selectedTokens.value = []
+  selectAll.value = false
+}
+
+const showToast = (message, type = 'success') => {
+  toast.value.message = message
+  toast.value.type = type
+  toast.value.show = true
+
+  setTimeout(() => {
+    toast.value.show = false
+  }, 3000)
 }
 
 const copyToClipboard = async (text) => {
   try {
     await navigator.clipboard.writeText(text)
-    // 可以添加一个轻提示，比如使用 Toast 组件
-    alert('已复制到剪贴板')
+    showToast('已复制到剪贴板')
   } catch (err) {
     console.error('复制失败:', err)
+    showToast('复制失败', 'error')
   }
 }
 
 const getTokens = async () => {
   try {
-    const res = await axios.get('/api/getAllAccounts', {
+    // 始终获取完整的账号列表以确保数据同步
+    const fullRes = await axios.get('/api/getAllAccounts', {
       params: {
-        page: currentPage.value,
-        pageSize: pageSize.value
+        page: 1,
+        pageSize: 1000
       },
       headers: {
         'Authorization': localStorage.getItem('apiKey') || ''
       }
     })
-    
-    if (pageSize.value >= 1000) {
-      // 如果是获取全部，则保存完整列表
-      allTokens.value = res.data.data
-    } else {
-      // 更新当前页数据
-      tokens.value = res.data.data
-      // 如果是第一次加载，更新总条数
-      if (allTokens.value.length === 0) {
-        const fullRes = await axios.get('/api/getAllAccounts', {
-          params: {
-            page: 1,
-            pageSize: 1000
-          },
-          headers: {
-            'Authorization': localStorage.getItem('apiKey') || ''
-          }
-        })
-        allTokens.value = fullRes.data.data
-      }
+
+    allTokens.value = fullRes.data.data
+
+    // 如果当前页超出了总页数，重置到第一页
+    if (currentPage.value > totalPages.value && totalPages.value > 0) {
+      currentPage.value = 1
     }
+
+    // 重置选择状态
+    selectedTokens.value = []
+    selectAll.value = false
+
   } catch (error) {
     console.error('获取Token列表失败:', error)
-    alert('获取Token列表失败: ' + error.message)
+    showToast('获取Token列表失败: ' + error.message, 'error')
   }
 }
 
@@ -428,10 +489,10 @@ const addToken = async () => {
     showAddModal.value = false
     newAccount.value = { email: '', password: '' }
     await getTokens()
-    alert('添加账号成功')
+    showToast('添加账号成功')
   } catch (error) {
     console.error('添加账号失败:', error)
-    alert('添加账号失败: ' + error.message)
+    showToast('添加账号失败: ' + error.message, 'error')
   }
 }
 
@@ -445,16 +506,70 @@ const addBatchTokens = async () => {
     showAddModal.value = false
     batchAccounts.value = ''
     await getTokens()
-    alert('批量添加任务已提交')
+    showToast('批量添加任务已提交')
   } catch (error) {
     console.error('批量添加失败:', error)
-    alert('批量添加失败: ' + error.message)
+    showToast('批量添加失败: ' + error.message, 'error')
+  }
+}
+
+const refreshToken = async (email) => {
+  if (refreshingTokens.value.includes(email)) return
+
+  refreshingTokens.value.push(email)
+
+  try {
+    await axios.post('/api/refreshAccount', { email }, {
+      headers: {
+        'Authorization': localStorage.getItem('apiKey') || ''
+      }
+    })
+
+    // 刷新成功后重新获取账号列表
+    await getTokens()
+    showToast(`账号 ${email} 令牌刷新成功`)
+  } catch (error) {
+    console.error('刷新账号令牌失败:', error)
+    showToast('刷新账号令牌失败: ' + error.message, 'error')
+  } finally {
+    // 移除刷新状态
+    const index = refreshingTokens.value.indexOf(email)
+    if (index > -1) {
+      refreshingTokens.value.splice(index, 1)
+    }
+  }
+}
+
+const refreshAllAccounts = async () => {
+  if (isRefreshingAll.value) return
+
+  if (!confirm('确定要刷新所有账号的令牌吗？这可能需要一些时间。')) return
+
+  isRefreshingAll.value = true
+
+  try {
+    const response = await axios.post('/api/refreshAllAccounts', {
+      thresholdHours: 24
+    }, {
+      headers: {
+        'Authorization': localStorage.getItem('apiKey') || ''
+      }
+    })
+
+    // 刷新成功后重新获取账号列表
+    await getTokens()
+    showToast(`批量刷新完成，成功刷新了 ${response.data.refreshedCount} 个账号`)
+  } catch (error) {
+    console.error('批量刷新失败:', error)
+    showToast('批量刷新失败: ' + error.message, 'error')
+  } finally {
+    isRefreshingAll.value = false
   }
 }
 
 const deleteToken = async (email) => {
   if (!confirm('确定要删除此账号吗？')) return
-  
+
   try {
     await axios.delete('/api/deleteAccount', {
       data: { email },
@@ -463,16 +578,16 @@ const deleteToken = async (email) => {
       }
     })
     await getTokens()
-    alert('删除账号成功')
+    showToast('删除账号成功')
   } catch (error) {
     console.error('删除账号失败:', error)
-    alert('删除账号失败: ' + error.message)
+    showToast('删除账号失败: ' + error.message, 'error')
   }
 }
 
 const exportAccounts = () => {
   if (allTokens.value.length === 0) {
-    alert('没有可导出的账号')
+    showToast('没有可导出的账号', 'error')
     return
   }
   
@@ -496,7 +611,7 @@ const exportAccounts = () => {
     URL.revokeObjectURL(url)
   }, 100)
   
-  alert('导出完成')
+  showToast('导出完成')
 }
 
 onMounted(() => {
@@ -585,7 +700,17 @@ onMounted(() => {
   opacity: 1;
 }
 
-/* 自定义滚动条样式 */
+/* 隐藏滚动条样式 */
+.scrollbar-hidden {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* 自定义滚动条样式（备用） */
 .max-h-\[calc\(100vh-200px\)\]::-webkit-scrollbar {
   width: 6px;
 }
@@ -657,5 +782,111 @@ onMounted(() => {
   100% {
     box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
   }
+}
+
+/* 马卡龙紫色刷新按钮动画 */
+@keyframes refresh-pulse-purple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(168, 85, 247, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
+  }
+}
+
+/* 马卡龙绿色刷新按钮动画 */
+@keyframes refresh-pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(74, 222, 128, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+  }
+}
+
+.action-button:hover {
+  animation: refresh-pulse-purple 1.5s infinite;
+}
+
+/* 刷新中的按钮样式 - 马卡龙紫色 */
+.refreshing-button-purple {
+  background: linear-gradient(45deg, #c084fc, #a855f7);
+  color: white;
+  animation: refresh-pulse-purple 1.5s infinite;
+  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.3);
+}
+
+/* 刷新中的按钮样式 - 马卡龙绿色 */
+.refreshing-button-green {
+  background: linear-gradient(45deg, #86efac, #4ade80);
+  color: white;
+  animation: refresh-pulse-green 1.5s infinite;
+  box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+}
+
+/* 马卡龙色系按钮增强效果 */
+.action-button {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+.action-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* 单个刷新按钮的马卡龙绿色样式增强 */
+.text-green-600:hover {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0) !important;
+  border-color: #86efac !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2);
+}
+
+/* 绿色刷新按钮的基础样式 */
+.bg-green-50 {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 1px solid #bbf7d0;
+}
+
+.bg-green-50:hover {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  border-color: #86efac;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2);
+}
+
+/* 马卡龙绿色按钮样式 */
+.macaron-green-button {
+  background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+  border: 1px solid #bbf7d0;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.macaron-green-button:hover {
+  background: linear-gradient(135deg, #dcfce7, #bbf7d0);
+  border-color: #86efac;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(74, 222, 128, 0.2);
+}
+
+/* 马卡龙紫色按钮样式 */
+.macaron-purple-button {
+  background: linear-gradient(135deg, #faf5ff, #f3e8ff);
+  border: 1px solid #e9d5ff;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.macaron-purple-button:hover {
+  background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+  border-color: #c4b5fd;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(168, 85, 247, 0.2);
 }
 </style>

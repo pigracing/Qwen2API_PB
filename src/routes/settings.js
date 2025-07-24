@@ -2,7 +2,7 @@ const express = require('express')
 const router = express.Router()
 const config = require('../config')
 const { apiKeyVerify } = require('../middlewares/authorization')
-const { saveDefaultHeaders, saveDefaultCookie } = require('../utils/setting')
+const { logger } = require('../utils/logger')
 
 
 router.get('/settings', apiKeyVerify, async (req, res) => {
@@ -27,7 +27,7 @@ router.post('/setApiKey', apiKeyVerify, async (req, res) => {
     config.apiKey = apiKey
     res.json({ message: 'API Key更新成功' })
   } catch (error) {
-    console.error('更新API Key失败:', error)
+    logger.error('更新API Key失败', 'CONFIG', '', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -54,7 +54,7 @@ router.post('/setAutoRefresh', apiKeyVerify, async (req, res) => {
       message: '自动刷新设置更新成功'
     })
   } catch (error) {
-    console.error('更新自动刷新设置失败:', error)
+    logger.error('更新自动刷新设置失败', 'CONFIG', '', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -73,7 +73,7 @@ router.post('/setOutThink', apiKeyVerify, async (req, res) => {
       message: '思考输出设置更新成功'
     })
   } catch (error) {
-    console.error('更新思考输出设置失败:', error)
+    logger.error('更新思考输出设置失败', 'CONFIG', '', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -92,7 +92,7 @@ router.post('/search-info-mode', apiKeyVerify, async (req, res) => {
       message: '搜索信息模式更新成功'
     })
   } catch (error) {
-    console.error('更新搜索信息模式失败:', error)
+    logger.error('更新搜索信息模式失败', 'CONFIG', '', error)
     res.status(500).json({ error: error.message })
   }
 })

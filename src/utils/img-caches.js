@@ -1,6 +1,7 @@
 const fs = require('fs')
 const path = require('path')
 const config = require('../config')
+const { logger } = require('./logger')
 
 class imgCacheManager {
   constructor() {
@@ -16,7 +17,7 @@ class imgCacheManager {
         return fs.existsSync(cachePath)
       }
     } catch (e) {
-      console.log(`缓存检查失败: ${e}`)
+      logger.error('缓存检查失败', 'CACHE', '', e)
       return false
     }
   }
@@ -40,7 +41,7 @@ class imgCacheManager {
 
       }
     } catch (e) {
-      console.log(`添加缓存失败: ${e}`)
+      logger.error('添加缓存失败', 'CACHE', '', e)
       return false
     }
   }
@@ -70,7 +71,7 @@ class imgCacheManager {
         }
       }
     } catch (e) {
-      console.log(`获取缓存失败: ${e}`)
+      logger.error('获取缓存失败', 'CACHE', '', e)
       return {
         status: 500,
         url: null

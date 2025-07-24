@@ -1,114 +1,239 @@
+const axios = require('axios')
 const OSS = require('ali-oss')
 const uuid = require('uuid')
-const accountManager = require('./account')
 const mimetypes = require('mime-types')
-
-const GET_STS_TOKEN_URL = "https://chat.qwen.ai/api/v1/files/getstsToken"
+const { logger } = require('./logger')
 
 /**
- * 从完整MIME类型获取简化的文件类型 (例如 "image", "video")。
- * @param {string} mimeType - 完整的MIME类型 (例如 "image/png", "application/pdf")。
- * @returns {string} 简化文件类型，默认为 "file"。
+ * 文件上传管理器
+ * 提供智能的文件上传、错误处理和重试机制
  */
-function getSimpleFileType(mimeType) {
-  if (!mimeType) return "file";
-  return mimeType.split('/')[0] || "file";
+
+// 配置常量
+const UPLOAD_CONFIG = {
+  stsTokenUrl: 'https://chat.qwen.ai/api/v1/files/getstsToken',
+  maxRetries: 3,
+  timeout: 30000,
+  maxFileSize: 100 * 1024 * 1024, // 100MB
+  retryDelay: 1000
+}
+
+// 支持的文件类型
+const SUPPORTED_TYPES = {
+  image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'],
+  video: ['video/mp4', 'video/avi', 'video/mov', 'video/wmv', 'video/flv'],
+  audio: ['audio/mp3', 'audio/wav', 'audio/aac', 'audio/ogg'],
+  document: ['application/pdf', 'text/plain', 'application/msword']
 }
 
 /**
- * 请求STS Token。
- * @param {string} filename - 文件名。
- * @param {number} filesize - 文件大小 (字节)。
- * @param {string} filetypeSimple - 简化文件类型 (例如 "image")。
- * @param {string} qwenAuthToken - 从 accountManager 获取的通义千问认证Token (不含 "Bearer ")。
- * @returns {Promise<object>} STS Token响应数据。
- * @throws {Error} 如果请求失败。
+ * 验证文件大小
+ * @param {number} fileSize - 文件大小（字节）
+ * @returns {boolean} 是否符合大小限制
  */
-async function requestStsToken(filename, filesize, filetypeSimple, qwenAuthToken) {
-  const requestId = uuid.v4();
-  const bearerToken = qwenAuthToken.startsWith('Bearer ') ? qwenAuthToken : `Bearer ${qwenAuthToken}`;
+const validateFileSize = (fileSize) => {
+  return fileSize > 0 && fileSize <= UPLOAD_CONFIG.maxFileSize
+}
 
-  const headers = {
-    ...accountManager.defaultHeaders,
-    "Authorization": bearerToken,
-    "x-request-id": requestId,
-    "Content-Type": "application/json",
+/**
+ * 验证文件类型
+ * @param {string} mimeType - MIME类型
+ * @returns {boolean} 是否为支持的文件类型
+ */
+const validateFileType = (mimeType) => {
+  if (!mimeType) return false
+
+  return Object.values(SUPPORTED_TYPES).some(types =>
+    types.includes(mimeType.toLowerCase())
+  )
+}
+
+/**
+ * 从完整MIME类型获取简化的文件类型
+ * @param {string} mimeType - 完整的MIME类型
+ * @returns {string} 简化文件类型
+ */
+const getSimpleFileType = (mimeType) => {
+  if (!mimeType) return 'file'
+
+  const mainType = mimeType.split('/')[0].toLowerCase()
+
+  // 检查是否为支持的主要类型
+  if (Object.keys(SUPPORTED_TYPES).includes(mainType)) {
+    return mainType
   }
-  delete headers.Host
 
-  const payload = { filename, filesize, filetype: filetypeSimple };
+  return 'file'
+}
 
+/**
+ * 延迟函数
+ * @param {number} ms - 延迟毫秒数
+ */
+const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
+
+/**
+ * 请求STS Token（带重试机制）
+ * @param {string} filename - 文件名
+ * @param {number} filesize - 文件大小（字节）
+ * @param {string} filetypeSimple - 简化文件类型
+ * @param {string} authToken - 认证Token
+ * @param {number} retryCount - 重试次数
+ * @returns {Promise<Object>} STS Token响应数据
+ */
+const requestStsToken = async (filename, filesize, filetypeSimple, authToken, retryCount = 0) => {
   try {
-    const response = await axios.post(GET_STS_TOKEN_URL, payload, { headers, timeout: 30000 });
-    if (response.status === 200 && response.data) {
-      // console.log("[+] 已成功接收到STS Token和文件信息。");
-      const stsDataFull = response.data;
-      const credentials = {
-        access_key_id: stsDataFull.access_key_id,
-        access_key_secret: stsDataFull.access_key_secret,
-        security_token: stsDataFull.security_token
-      };
-      const fileInfo = {
-        url: stsDataFull.file_url, // 这是最终给大模型的URL
-        path: stsDataFull.file_path, // OSS对象路径
-        bucket: stsDataFull.bucketname,
-        endpoint: stsDataFull.region + ".aliyuncs.com", // OSS endpoint
-        id: stsDataFull.file_id // 通义千问文件ID
-      };
+    // 参数验证
+    if (!filename || !authToken) {
+      logger.error('文件名和认证Token不能为空', 'UPLOAD')
+      throw new Error('文件名和认证Token不能为空')
+    }
 
-      if (!credentials.access_key_id || !credentials.access_key_secret || !credentials.security_token ||
-          !fileInfo.url || !fileInfo.path || !fileInfo.bucket) {
-        console.error("[!] 从API响应中提取凭证或文件信息失败。响应数据:", stsDataFull);
-        throw new Error("获取到的STS凭证或文件信息不完整。");
+    if (!validateFileSize(filesize)) {
+      logger.error(`文件大小超出限制，最大允许 ${UPLOAD_CONFIG.maxFileSize / 1024 / 1024}MB`, 'UPLOAD')
+      throw new Error(`文件大小超出限制，最大允许 ${UPLOAD_CONFIG.maxFileSize / 1024 / 1024}MB`)
+    }
+
+    const requestId = uuid.v4()
+    const bearerToken = authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`
+
+    const headers = {
+      'Authorization': bearerToken,
+      'Content-Type': 'application/json',
+      'x-request-id': requestId,
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+
+    const payload = {
+      filename,
+      filesize,
+      filetype: filetypeSimple
+    }
+
+    logger.info(`请求STS Token: ${filename} (${filesize} bytes, ${filetypeSimple})`, 'UPLOAD', '🎫')
+
+    const response = await axios.post(UPLOAD_CONFIG.stsTokenUrl, payload, {
+      headers,
+      timeout: UPLOAD_CONFIG.timeout
+    })
+
+    if (response.status === 200 && response.data) {
+      const stsData = response.data
+
+      // 验证响应数据完整性
+      const credentials = {
+        access_key_id: stsData.access_key_id,
+        access_key_secret: stsData.access_key_secret,
+        security_token: stsData.security_token
       }
-      return { credentials, file_info: fileInfo };
+
+      const fileInfo = {
+        url: stsData.file_url,
+        path: stsData.file_path,
+        bucket: stsData.bucketname,
+        endpoint: stsData.region + '.aliyuncs.com',
+        id: stsData.file_id
+      }
+
+      // 检查必要字段
+      const requiredCredentials = ['access_key_id', 'access_key_secret', 'security_token']
+      const requiredFileInfo = ['url', 'path', 'bucket', 'endpoint', 'id']
+
+      const missingCredentials = requiredCredentials.filter(key => !credentials[key])
+      const missingFileInfo = requiredFileInfo.filter(key => !fileInfo[key])
+
+      if (missingCredentials.length > 0 || missingFileInfo.length > 0) {
+        logger.error(`STS响应数据不完整: 缺少 ${[...missingCredentials, ...missingFileInfo].join(', ')}`, 'UPLOAD')
+        throw new Error(`STS响应数据不完整: 缺少 ${[...missingCredentials, ...missingFileInfo].join(', ')}`)
+      }
+
+      logger.success('STS Token获取成功', 'UPLOAD')
+      return { credentials, file_info: fileInfo }
     } else {
-      console.error(`[!] 获取STS Token失败。状态码: ${response.status}, 响应:`, response.data);
-      throw new Error(`获取STS Token失败，状态码: ${response.status}`);
+      logger.error(`获取STS Token失败，状态码: ${response.status}`, 'UPLOAD')
+      throw new Error(`获取STS Token失败，状态码: ${response.status}`)
     }
   } catch (error) {
-    console.error("[!] 请求或处理STS Token时发生错误:", error.response ? error.response.data : error.message);
-    if (error.response && error.response.status === 403) {
-        console.error("[!] 收到 403 Forbidden 错误。可能需要检查请求头或Token权限。");
+    logger.error(`请求STS Token失败 (重试: ${retryCount})`, 'UPLOAD', '', error)
+
+    // 403错误特殊处理
+    if (error.response?.status === 403) {
+      logger.error('403 Forbidden错误，可能是Token权限问题', 'UPLOAD')
+      logger.error('认证失败，请检查Token权限', 'UPLOAD')
+      throw new Error('认证失败，请检查Token权限')
     }
-    throw error;
+
+    // 重试逻辑
+    if (retryCount < UPLOAD_CONFIG.maxRetries &&
+        (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' ||
+         error.response?.status >= 500)) {
+
+      const delayMs = UPLOAD_CONFIG.retryDelay * Math.pow(2, retryCount)
+      logger.warn(`等待 ${delayMs}ms 后重试...`, 'UPLOAD', '⏳')
+      await delay(delayMs)
+
+      return requestStsToken(filename, filesize, filetypeSimple, authToken, retryCount + 1)
+    }
+
+    throw error
   }
 }
 
 /**
- * 使用STS凭证将文件Buffer上传到阿里云OSS。
- * @param {Buffer} fileBuffer - 文件内容的Buffer。
- * @param {object} stsCredentials - STS凭证 (access_key_id, access_key_secret, security_token)。
- * @param {object} ossInfo - OSS信息 (bucket, path, endpoint)。
- * @param {string} fileContentTypeFull - 文件的完整MIME类型。
- * @returns {Promise<void>}
- * @throws {Error} 如果上传失败。
+ * 使用STS凭证将文件Buffer上传到阿里云OSS（带重试机制）
+ * @param {Buffer} fileBuffer - 文件内容的Buffer
+ * @param {Object} stsCredentials - STS凭证
+ * @param {Object} ossInfo - OSS信息
+ * @param {string} fileContentTypeFull - 文件的完整MIME类型
+ * @param {number} retryCount - 重试次数
+ * @returns {Promise<Object>} 上传结果
  */
-async function uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileContentTypeFull) {
-
+const uploadToOssWithSts = async (fileBuffer, stsCredentials, ossInfo, fileContentTypeFull, retryCount = 0) => {
   try {
+    // 参数验证
+    if (!fileBuffer || !stsCredentials || !ossInfo) {
+      logger.error('缺少必要的上传参数', 'UPLOAD')
+      throw new Error('缺少必要的上传参数')
+    }
+
     const client = new OSS({
       accessKeyId: stsCredentials.access_key_id,
       accessKeySecret: stsCredentials.access_key_secret,
       stsToken: stsCredentials.security_token,
       bucket: ossInfo.bucket,
       endpoint: ossInfo.endpoint,
-      secure: true, // 始终使用 HTTPS
-    });
+      secure: true,
+      timeout: UPLOAD_CONFIG.timeout
+    })
+
+    logger.info(`上传文件到OSS: ${ossInfo.path} (${fileBuffer.length} bytes)`, 'UPLOAD', '📤')
 
     const result = await client.put(ossInfo.path, fileBuffer, {
-      headers: { 'Content-Type': fileContentTypeFull }
-    });
+      headers: {
+        'Content-Type': fileContentTypeFull || 'application/octet-stream'
+      }
+    })
 
-    if (result.res.status === 200) {
-      // console.log(`[+] 文件已成功上传到OSS。ETag: ${result.etag}`);
+    if (result.res && result.res.status === 200) {
+      logger.success('文件上传到OSS成功', 'UPLOAD')
+      return { success: true, result }
     } else {
-      console.error(`[!] ali-oss 上传文件失败，HTTP状态码: ${result.res.status}`, result);
-      throw new Error(`ali-oss 上传失败，状态码: ${result.res.status}`);
+      logger.error(`OSS上传失败，状态码: ${result.res?.status || 'unknown'}`, 'UPLOAD')
+      throw new Error(`OSS上传失败，状态码: ${result.res?.status || 'unknown'}`)
     }
   } catch (error) {
-    console.error("[!] 使用 ali-oss 上传到OSS时发生错误:", error);
-    throw error;
+    logger.error(`OSS上传失败 (重试: ${retryCount})`, 'UPLOAD', '', error)
+
+    // 重试逻辑
+    if (retryCount < UPLOAD_CONFIG.maxRetries) {
+      const delayMs = UPLOAD_CONFIG.retryDelay * Math.pow(2, retryCount)
+      logger.warn(`等待 ${delayMs}ms 后重试OSS上传...`, 'UPLOAD', '⏳')
+      await delay(delayMs)
+
+      return uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileContentTypeFull, retryCount + 1)
+    }
+
+    throw error
   }
 }
 
@@ -120,32 +245,66 @@ async function uploadToOssWithSts(fileBuffer, stsCredentials, ossInfo, fileConte
  * @returns {Promise<{file_url: string, file_id: string, message: string}>} 包含上传后的URL、文件ID和成功消息。
  * @throws {Error} 如果任何步骤失败。
  */
-async function uploadFileToQwenOss(fileBuffer, originalFilename, qwenAuthToken) {
-  const filesize = fileBuffer.length;
-  const mimeType = mimetypes.lookup(originalFilename) || 'application/octet-stream'
-  const filetypeSimple = getSimpleFileType(mimeType)
+const uploadFileToQwenOss = async (fileBuffer, originalFilename, authToken) => {
+  try {
+    // 参数验证
+    if (!fileBuffer || !originalFilename || !authToken) {
+      logger.error('缺少必要的上传参数', 'UPLOAD')
+      throw new Error('缺少必要的上传参数')
+    }
 
-  // console.log(`[*] 开始上传文件: ${originalFilename}, 大小: ${filesize}, 类型: ${mimeType}, 简化类型: ${filetypeSimple}`)
+    const filesize = fileBuffer.length
+    const mimeType = mimetypes.lookup(originalFilename) || 'application/octet-stream'
+    const filetypeSimple = getSimpleFileType(mimeType)
 
-  if (!qwenAuthToken) {
-    throw new Error("通义千问认证Token (qwenAuthToken) 未提供。")
+    // 文件大小验证
+    if (!validateFileSize(filesize)) {
+      logger.error(`文件大小超出限制，最大允许 ${UPLOAD_CONFIG.maxFileSize / 1024 / 1024}MB`, 'UPLOAD')
+      throw new Error(`文件大小超出限制，最大允许 ${UPLOAD_CONFIG.maxFileSize / 1024 / 1024}MB`)
+    }
+
+    logger.info(`开始上传文件: ${originalFilename} (${filesize} bytes, ${mimeType})`, 'UPLOAD', '📤')
+
+    // 第一步：获取STS Token
+    const { credentials, file_info } = await requestStsToken(
+      originalFilename,
+      filesize,
+      filetypeSimple,
+      authToken
+    )
+
+    // 第二步：上传到OSS
+    await uploadToOssWithSts(fileBuffer, credentials, file_info, mimeType)
+
+    logger.success('文件上传流程完成', 'UPLOAD')
+
+    return {
+      status: 200,
+      file_url: file_info.url,
+      file_id: file_info.id,
+      message: '文件上传成功'
+    }
+  } catch (error) {
+    logger.error('文件上传流程失败', 'UPLOAD', '', error)
+    throw error
   }
+}
 
-  // 1. 请求STS Token
-  const stsData = await requestStsToken(originalFilename, filesize, filetypeSimple, qwenAuthToken)
-  const { credentials, file_info } = stsData
-
-  // 2. 上传到OSS
-  await uploadToOssWithSts(fileBuffer, credentials, file_info, mimeType)
-
-  // console.log(`[成功] 文件上传流程完成。CDN URL: ${file_info.url}`)
+/**
+ * 获取上传配置信息
+ * @returns {Object} 配置信息
+ */
+const getUploadConfig = () => {
   return {
-    file_url: file_info.url,
-    file_id: file_info.id,
-    status: 200
+    ...UPLOAD_CONFIG,
+    supportedTypes: SUPPORTED_TYPES
   }
 }
 
 module.exports = {
-  uploadFileToQwenOss
+  uploadFileToQwenOss,
+  getUploadConfig,
+  validateFileSize,
+  validateFileType,
+  getSimpleFileType
 }

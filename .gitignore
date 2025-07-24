@@ -3,3 +3,5 @@ package-lock.json
 .env
 data/data.json
 caches/*
+logs/*
+*.log

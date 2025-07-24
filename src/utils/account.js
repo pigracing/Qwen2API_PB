@@ -1,248 +1,254 @@
-const axios = require('axios')
-const { sha256Encrypt } = require('./tools')
-const { JwtDecode } = require('./tools')
 const config = require('../config/index.js')
-const redisClient = require('./redis')
-const fs = require('fs').promises
-const path = require('path')
-
+const DataPersistence = require('./data-persistence')
+const TokenManager = require('./token-manager')
+const AccountRotator = require('./account-rotator')
+const { generateApiModelList, getBaseModels } = require('./model-utils')
+const { logger } = require('./logger')
+/**
+ * 账户管理器
+ * 统一管理账户、令牌、模型等功能
+ */
 class Account {
   constructor() {
+    // 初始化各个管理器
+    this.dataPersistence = new DataPersistence()
+    this.tokenManager = new TokenManager()
+    this.accountRotator = new AccountRotator()
 
+    // 账户数据
     this.accountTokens = []
+    this.isInitialized = false
 
-    // 加载账户信息
-    this.loadAccountTokens()
+    // 配置信息
+    this.defaultHeaders = config.defaultHeaders || {}
 
-    // 设置定期刷新令牌 (每6小时刷新一次)
-    this.refreshInterval = setInterval(() => config.autoRefresh && this.autoRefreshTokens(), config.autoRefreshInterval * 1000)
-
-    this.currentIndex = 0
-    this.models = [
-      "qwen3-coder-plus",
-      "qwen3-235b-a22b",
-      "qwen3-30b-a3b",
-      "qwen3-32b",
-      "qwen-max-latest",
-      "qwen-plus-2025-01-25",
-      "qwq-32b",
-      "qwen-turbo-2025-02-11",
-      "qwen2.5-omni-7b",
-      "qvq-72b-preview-0310",
-      "qwen2.5-vl-32b-instruct",
-      "qwen2.5-14b-instruct-1m",
-      "qwen2.5-coder-32b-instruct",
-      "qwen2.5-72b-instruct"
-    ]
-
-    this.defaultHeaders = config.defaultHeaders
+    // 初始化
+    this._initialize()
   }
 
-  async loadAccountTokens() {
-    if (config.dataSaveMode === "redis") {
-      try {
-        const accountTokens = await redisClient.getAllAccounts()
-        if (accountTokens.length > 0) {
-          this.accountTokens = accountTokens
-        } else {
-          this.accountTokens = []
-        }
-      } catch (error) {
-        this.accountTokens = []
+  /**
+   * 异步初始化
+   * @private
+   */
+  async _initialize() {
+    try {
+      // 加载账户信息
+      await this.loadAccountTokens()
+
+      // 设置定期刷新令牌
+      if (config.autoRefresh) {
+        this.refreshInterval = setInterval(
+          () => this.autoRefreshTokens(),
+          (config.autoRefreshInterval || 21600) * 1000 // 默认6小时
+        )
       }
-    } else if (config.dataSaveMode === "file") {
-      try {
-        const filePath = path.join(__dirname, '../../data/data.json')
 
-        // 检查文件是否存在
-        try {
-          await fs.access(filePath)
-        } catch (error) {
-          // 文件不存在，创建默认文件
-          console.log('数据文件不存在，正在创建默认文件...')
-
-          // 确保目录存在
-          const dirPath = path.dirname(filePath)
-          await fs.mkdir(dirPath, { recursive: true })
-
-          // 创建默认数据结构
-          const defaultData = {
-            "defaultHeaders": null,
-            "defaultCookie": null,
-            "accounts": []
-          }
-
-          await fs.writeFile(filePath, JSON.stringify(defaultData, null, 2), 'utf-8')
-          console.log('默认数据文件创建成功')
-        }
-
-        // 读取文件内容
-        const Setting = JSON.parse(await fs.readFile(filePath, 'utf-8'))
-
-        if (Setting.accounts) {
-          this.accountTokens = Setting.accounts
-          console.log(`从文件中加载了 ${this.accountTokens.length} 个账户`)
-        } else {
-          this.accountTokens = []
-        }
-      } catch (error) {
-        console.error('加载账户信息失败:', error.message)
-        this.accountTokens = []
-      }
-    } else {
-      try {
-        const accountTokens = process.env.ACCOUNTS.split(',')
-        const accounts = []
-        accountTokens.forEach(item => {
-          const [email, password] = item.split(':')
-          const token = this.login(email, password)
-          if (token) {
-            const decoded = JwtDecode(token)
-            accounts.push({
-              email,
-              password,
-              token,
-              expires: decoded.exp
-            })
-          }
-        })
-        this.accountTokens = accounts
-      } catch (error) {
-        this.accountTokens = []
-      }
+      this.isInitialized = true
+      logger.success(`账户管理器初始化完成，共加载 ${this.accountTokens.length} 个账户`, 'ACCOUNT')
+    } catch (error) {
+      logger.error('账户管理器初始化失败', 'ACCOUNT', '', error)
     }
   }
 
+  /**
+   * 加载账户令牌数据
+   * @returns {Promise<void>}
+   */
+  async loadAccountTokens() {
+    try {
+      this.accountTokens = await this.dataPersistence.loadAccounts()
 
-  // 添加自动刷新令牌的方法
-  async autoRefreshTokens() {
-    console.log('开始自动刷新令牌...')
+      // 如果是环境变量模式，需要进行登录获取令牌
+      if (config.dataSaveMode === 'env' && this.accountTokens.length > 0) {
+        await this._loginEnvironmentAccounts()
+      }
 
-    // 找出即将过期的令牌 (24小时内过期)
-    const now = Math.floor(Date.now() / 1000)
-    const expirationThreshold = now + 24 * 60 * 60
+      // 验证和清理无效令牌
+      await this._validateAndCleanTokens()
 
-    const needsRefresh = this.accountTokens.filter(token => token.expiresAt < expirationThreshold)
+      // 更新账户轮询器
+      this.accountRotator.setAccounts(this.accountTokens)
 
-    if (needsRefresh.length === 0) {
-      console.log('没有需要刷新的令牌')
+      logger.success(`成功加载 ${this.accountTokens.length} 个账户`, 'ACCOUNT')
+    } catch (error) {
+      logger.error('加载账户令牌失败', 'ACCOUNT', '', error)
+      this.accountTokens = []
+    }
+  }
+
+  /**
+   * 为环境变量模式的账户进行登录
+   * @private
+   */
+  async _loginEnvironmentAccounts() {
+    const loginPromises = this.accountTokens.map(async (account) => {
+      if (!account.token && account.email && account.password) {
+        const token = await this.tokenManager.login(account.email, account.password)
+        if (token) {
+          const decoded = this.tokenManager.validateToken(token)
+          if (decoded) {
+            account.token = token
+            account.expires = decoded.exp
+          }
+        }
+      }
+      return account
+    })
+
+    this.accountTokens = await Promise.all(loginPromises)
+  }
+
+  /**
+   * 验证和清理无效令牌
+   * @private
+   */
+  async _validateAndCleanTokens() {
+    const validAccounts = []
+
+    for (const account of this.accountTokens) {
+      if (account.token && this.tokenManager.validateToken(account.token)) {
+        validAccounts.push(account)
+      } else if (account.email && account.password) {
+        // 尝试重新登录
+        logger.info(`令牌无效，尝试重新登录: ${account.email}`, 'TOKEN', '🔄')
+        const newToken = await this.tokenManager.login(account.email, account.password)
+        if (newToken) {
+          const decoded = this.tokenManager.validateToken(newToken)
+          if (decoded) {
+            account.token = newToken
+            account.expires = decoded.exp
+            validAccounts.push(account)
+          }
+        }
+      }
+    }
+
+    this.accountTokens = validAccounts
+  }
+
+
+  /**
+   * 自动刷新即将过期的令牌
+   * @param {number} thresholdHours - 过期阈值（小时）
+   * @returns {Promise<number>} 成功刷新的令牌数量
+   */
+  async autoRefreshTokens(thresholdHours = 24) {
+    if (!this.isInitialized) {
+      logger.warn('账户管理器尚未初始化，跳过自动刷新', 'TOKEN')
       return 0
     }
 
-    console.log(`发现 ${needsRefresh.length} 个令牌需要刷新`)
-    let refreshedCount = 0
-    for (const token of needsRefresh) {
-      const refreshed = await this.refreshSingleToken(token)
-      if (refreshed) refreshedCount++
+    logger.info('开始自动刷新令牌...', 'TOKEN', '🔄')
+
+    const result = await this.tokenManager.batchRefreshTokens(this.accountTokens, thresholdHours)
+
+    // 更新内存中的账户数据
+    result.refreshed.forEach(updatedAccount => {
+      const index = this.accountTokens.findIndex(acc => acc.email === updatedAccount.email)
+      if (index !== -1) {
+        this.accountTokens[index] = updatedAccount
+      }
+    })
+
+    // 保存更新后的数据
+    if (result.refreshed.length > 0) {
+      await this._saveUpdatedAccounts(result.refreshed)
+      this.accountRotator.setAccounts(this.accountTokens)
     }
 
-    console.log(`成功刷新了 ${refreshedCount} 个令牌`)
-    return refreshedCount
+    // 处理失败的账户
+    result.failed.forEach(account => {
+      this.accountRotator.recordFailure(account.email)
+    })
+
+    return result.refreshed.length
   }
 
-  // 添加检查令牌是否即将过期的方法
-  isTokenExpiringSoon(token, thresholdHours = 6) {
-    const now = Math.floor(Date.now() / 1000)
-    const thresholdSeconds = thresholdHours * 60 * 60
-    return token.expiresAt - now < thresholdSeconds
-  }
-
+  /**
+   * 获取可用的账户令牌
+   * @returns {string|null} 账户令牌或null
+   */
   getAccountToken() {
-
-    if (this.accountTokens.length === 0) {
-      console.error('没有可用的账户令牌')
+    if (!this.isInitialized) {
+      logger.warn('账户管理器尚未初始化完成', 'ACCOUNT')
       return null
     }
 
-    if (this.currentIndex >= this.accountTokens.length) {
-      this.currentIndex = 0
+    if (this.accountTokens.length === 0) {
+      logger.error('没有可用的账户令牌', 'ACCOUNT')
+      return null
     }
 
-    const token = this.accountTokens[this.currentIndex]
-    this.currentIndex++
+    const token = this.accountRotator.getNextToken()
+    if (!token) {
+      logger.error('所有账户令牌都不可用', 'ACCOUNT')
+    }
 
-    if (token.token) {
-      return token.token
-    } else {
-      // 尝试下一个令牌
-      return this.getAccountToken()
+    return token
+  }
+
+  /**
+   * 根据邮箱获取特定账户的令牌
+   * @param {string} email - 邮箱地址
+   * @returns {string|null} 账户令牌或null
+   */
+  getTokenByEmail(email) {
+    return this.accountRotator.getTokenByEmail(email)
+  }
+
+  /**
+   * 保存更新后的账户数据
+   * @param {Array} updatedAccounts - 更新后的账户列表
+   * @private
+   */
+  async _saveUpdatedAccounts(updatedAccounts) {
+    try {
+      for (const account of updatedAccounts) {
+        await this.dataPersistence.saveAccount(account.email, {
+          password: account.password,
+          token: account.token,
+          expires: account.expires
+        })
+      }
+    } catch (error) {
+      logger.error('保存更新后的账户数据失败', 'ACCOUNT', '', error)
     }
   }
 
-  // 刷新单个令牌的方法
-  async refreshSingleToken(token) {
-    try {
-      const newToken = await this.login(token.email, token.password)
-      if (newToken) {
-        const decoded = JwtDecode(newToken)
-        const now = Math.floor(Date.now() / 1000)
-        
-        // 直接更新内存中的token信息
-        const tokenIndex = this.accountTokens.findIndex(t => t.email === token.email)
-        if (tokenIndex !== -1) {
-          this.accountTokens[tokenIndex].token = newToken
-          this.accountTokens[tokenIndex].expires = decoded.exp
-        }
-        
-        // 根据配置保存到持久化存储
-        let saveResult = true
-        if (config.dataSaveMode === "redis") {
-          try {
-            saveResult = await redisClient.setAccount(token.email, {
-              password: token.password,
-              token: newToken,
-              expires: decoded.exp
-            })
-          } catch (error) {
-            console.error(`Redis保存失败: ${token.email}`, error.message)
-            saveResult = false
-          }
-        } else if (config.dataSaveMode === "file") {
-          try {
-            const filePath = path.join(__dirname, '../../data/data.json')
-            const Setting = JSON.parse(await fs.readFile(filePath, 'utf-8'))
-            
-            if (Setting.accounts) {
-              // 找到并更新现有账户，或添加新账户
-              const existingIndex = Setting.accounts.findIndex(item => item.email === token.email)
-              const updatedAccount = {
-                email: token.email,
-                password: token.password,
-                token: newToken,
-                expires: decoded.exp
-              }
-              
-              if (existingIndex !== -1) {
-                Setting.accounts[existingIndex] = updatedAccount
-              } else {
-                Setting.accounts.push(updatedAccount)
-              }
-              
-              await fs.writeFile(filePath, JSON.stringify(Setting, null, 2), 'utf-8')
-            } else {
-              saveResult = false
-            }
-          } catch (error) {
-            console.error(`文件保存失败: ${token.email}`, error.message)
-            saveResult = false
-          }
-        }
-        
-        if (saveResult) {
-          console.log(`刷新令牌成功: ${token.email} (还有${Math.round((decoded.exp - now) / 3600)}小时过期)`)
-          return true
-        } else {
-          console.error(`保存令牌失败: ${token.email}`)
-          return false
-        }
-      } else {
-        console.error(`获取新令牌失败: ${token.email}`)
-        return false
-      }
-    } catch (error) {
-      console.error(`刷新令牌失败 (${token.email}):`, error.message)
+  /**
+   * 手动刷新指定账户的令牌
+   * @param {string} email - 邮箱地址
+   * @returns {Promise<boolean>} 刷新是否成功
+   */
+  async refreshAccountToken(email) {
+    const account = this.accountTokens.find(acc => acc.email === email)
+    if (!account) {
+      logger.error(`未找到邮箱为 ${email} 的账户`, 'ACCOUNT')
       return false
     }
+
+    const updatedAccount = await this.tokenManager.refreshToken(account)
+    if (updatedAccount) {
+      // 更新内存中的数据
+      const index = this.accountTokens.findIndex(acc => acc.email === email)
+      if (index !== -1) {
+        this.accountTokens[index] = updatedAccount
+      }
+
+      // 保存到持久化存储
+      await this.dataPersistence.saveAccount(email, {
+        password: updatedAccount.password,
+        token: updatedAccount.token,
+        expires: updatedAccount.expires
+      })
+
+      // 重置失败计数
+      this.accountRotator.resetFailures(email)
+
+      return true
+    }
+
+    return false
   }
 
   // 更新销毁方法，清除定时器
@@ -255,43 +261,36 @@ class Account {
     }
   }
 
+  /**
+   * 获取模型列表（OpenAI API 格式）
+   * @returns {Promise<Object>} 模型列表
+   */
   async getModelList() {
-    const modelsList = []
-    for (const item of this.models) {
-      modelsList.push(item)
-      modelsList.push(item + '-thinking')
-      modelsList.push(item + '-search')
-      modelsList.push(item + '-thinking-search')
-      // modelsList.push(item + '-draw')
-    }
-
-    const models = {
-      "object": "list",
-      "data": modelsList.map(item => ({
-        "id": item,
-        "object": "model",
-        "created": new Date().getTime(),
-        "owned_by": "qwen"
-      }))
-    }
-    return models
+    return generateApiModelList()
   }
 
+  /**
+   * 生成 Markdown 表格
+   * @param {Array} websites - 网站信息数组
+   * @param {string} mode - 模式 ('table' 或 'text')
+   * @returns {Promise<string>} Markdown 字符串
+   */
   async generateMarkdownTable(websites, mode) {
     // 输入校验
     if (!Array.isArray(websites) || websites.length === 0) {
-      return ""
+      return ''
     }
 
-    let markdown = ""
-    if (mode === "table") {
-      markdown += "| **序号** | **网站URL** | **来源** |\n"
-      markdown += "|:---|:---|:---|\n"
+    let markdown = ''
+    if (mode === 'table') {
+      markdown += '| **序号** | **网站URL** | **来源** |\n'
+      markdown += '|:---|:---|:---|\n'
     }
+
     // 默认值
-    const DEFAULT_TITLE = "未知标题"
-    const DEFAULT_URL = "https://www.baidu.com"
-    const DEFAULT_HOSTNAME = "未知来源"
+    const DEFAULT_TITLE = '未知标题'
+    const DEFAULT_URL = 'https://www.baidu.com'
+    const DEFAULT_HOSTNAME = '未知来源'
 
     // 表格内容
     websites.forEach((site, index) => {
@@ -299,7 +298,7 @@ class Account {
       // 处理字段值，若为空则使用默认值
       const urlCell = `[${title || DEFAULT_TITLE}](${url || DEFAULT_URL})`
       const hostnameCell = hostname || DEFAULT_HOSTNAME
-      if (mode === "table") {
+      if (mode === 'table') {
         markdown += `| ${index + 1} | ${urlCell} | ${hostnameCell} |\n`
       } else {
         markdown += `[${index + 1}] ${urlCell} | 来源: ${hostnameCell}\n`
@@ -309,59 +308,183 @@ class Account {
     return markdown
   }
 
+  /**
+   * 设置默认模型列表（已废弃，模型列表由 models-map.js 管理）
+   * @param {Array<string>} models - 模型列表
+   * @deprecated 模型列表现在由 models-map.js 统一管理
+   */
   async setDefaultModels(models) {
-    this.models = models
+    logger.warn('setDefaultModels 方法已废弃，模型列表由 models-map.js 统一管理', 'ACCOUNT')
   }
 
   /**
-   * @description: 获取原始模型列表
-   * @returns {array} - 模型列表
+   * 获取基础模型列表
+   * @returns {Promise<Array<string>>} 基础模型列表
    */
   async getModels() {
-    return this.models
+    return getBaseModels()
   }
 
+  /**
+   * 获取所有账户信息
+   * @returns {Array} 账户列表
+   */
   getAllAccountKeys() {
     return this.accountTokens
   }
 
+  /**
+   * 用户登录（委托给 TokenManager）
+   * @param {string} email - 邮箱
+   * @param {string} password - 密码
+   * @returns {Promise<string|null>} 令牌或null
+   */
   async login(email, password) {
-    try {
-      const response = await axios.post('https://chat.qwen.ai/api/v1/auths/signin', {
-        email: email,
-        password: sha256Encrypt(password)
-      }, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0"
-        }
-      })
+    return await this.tokenManager.login(email, password)
+  }
 
-      if (response.data && response.data.token) {
-        console.log(`${email} 登录成功`)
-        return response.data.token
-      } else {
-        console.error(`${email} 登录响应缺少令牌`)
+  /**
+   * 获取账户健康状态统计
+   * @returns {Object} 健康状态统计
+   */
+  getHealthStats() {
+    const tokenStats = this.tokenManager.getTokenHealthStats(this.accountTokens)
+    const rotatorStats = this.accountRotator.getStats()
+
+    return {
+      accounts: tokenStats,
+      rotation: rotatorStats,
+      initialized: this.isInitialized
+    }
+  }
+
+  /**
+   * 记录账户使用失败
+   * @param {string} email - 邮箱地址
+   */
+  recordAccountFailure(email) {
+    this.accountRotator.recordFailure(email)
+  }
+
+  /**
+   * 重置账户失败计数
+   * @param {string} email - 邮箱地址
+   */
+  resetAccountFailures(email) {
+    this.accountRotator.resetFailures(email)
+  }
+
+  /**
+   * 添加新账户
+   * @param {string} email - 邮箱
+   * @param {string} password - 密码
+   * @returns {Promise<boolean>} 添加是否成功
+   */
+  async addAccount(email, password) {
+    try {
+      // 检查账户是否已存在
+      const existingAccount = this.accountTokens.find(acc => acc.email === email)
+      if (existingAccount) {
+        logger.warn(`账户 ${email} 已存在`, 'ACCOUNT')
         return false
       }
-    } catch (e) {
-      console.error(`${email} 登录失败:`, e.message)
+
+      // 尝试登录获取令牌
+      const token = await this.tokenManager.login(email, password)
+      if (!token) {
+        logger.error(`账户 ${email} 登录失败，无法添加`, 'ACCOUNT')
+        return false
+      }
+
+      const decoded = this.tokenManager.validateToken(token)
+      if (!decoded) {
+        logger.error(`账户 ${email} 令牌无效，无法添加`, 'ACCOUNT')
+        return false
+      }
+
+      const newAccount = {
+        email,
+        password,
+        token,
+        expires: decoded.exp
+      }
+
+      // 添加到内存
+      this.accountTokens.push(newAccount)
+
+      // 保存到持久化存储
+      await this.dataPersistence.saveAccount(email, newAccount)
+
+      // 更新轮询器
+      this.accountRotator.setAccounts(this.accountTokens)
+
+      logger.success(`成功添加账户: ${email}`, 'ACCOUNT')
+      return true
+    } catch (error) {
+      logger.error(`添加账户失败 (${email})`, 'ACCOUNT', '', error)
       return false
     }
   }
 
+  /**
+   * 移除账户
+   * @param {string} email - 邮箱地址
+   * @returns {Promise<boolean>} 移除是否成功
+   */
+  async removeAccount(email) {
+    try {
+      const index = this.accountTokens.findIndex(acc => acc.email === email)
+      if (index === -1) {
+        logger.warn(`账户 ${email} 不存在`, 'ACCOUNT')
+        return false
+      }
+
+      // 从内存中移除
+      this.accountTokens.splice(index, 1)
+
+      // 更新轮询器
+      this.accountRotator.setAccounts(this.accountTokens)
+
+      logger.success(`成功移除账户: ${email}`, 'ACCOUNT')
+      return true
+    } catch (error) {
+      logger.error(`移除账户失败 (${email})`, 'ACCOUNT', '', error)
+      return false
+    }
+  }
+
+  /**
+   * 删除账户（向后兼容）
+   * @param {string} email - 邮箱地址
+   * @returns {boolean} 删除是否成功
+   */
   deleteAccount(email) {
     const index = this.accountTokens.findIndex(t => t.email === email)
     if (index !== -1) {
       this.accountTokens.splice(index, 1)
+      this.accountRotator.setAccounts(this.accountTokens)
       return true
     }
     return false
   }
 
+  /**
+   * 清理资源
+   */
+  destroy() {
+    if (this.refreshInterval) {
+      clearInterval(this.refreshInterval)
+      this.refreshInterval = null
+    }
+
+    this.accountRotator.reset()
+    logger.info('账户管理器已清理资源', 'ACCOUNT', '🧹')
+  }
+
 }
 
 if (!(process.env.API_KEY || config.apiKey)) {
-  console.log('请务必设置 API_KEY 环境变量')
+  logger.error('请务必设置 API_KEY 环境变量', 'CONFIG', '⚙️')
   process.exit(1)
 }
 

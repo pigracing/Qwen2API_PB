@@ -1,9 +1,10 @@
 const express = require('express')
 const router = express.Router()
 const accountManager = require('../utils/account')
+const { logger } = require('../utils/logger')
 const { JwtDecode } = require('../utils/tools')
 const { apiKeyVerify } = require('../middlewares/authorization')
-const { deleteAccount, saveAccounts } = require('../utils/setting')
+const { deleteAccount, saveAccounts, refreshAccountToken } = require('../utils/setting')
 
 /**
  * 获取所有账号（分页）
@@ -42,7 +43,7 @@ router.get('/getAllAccounts', apiKeyVerify, async (req, res) => {
       data: accounts
     })
   } catch (error) {
-    console.error('获取账号列表失败:', error)
+    logger.error('获取账号列表失败', 'ACCOUNT', '', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -88,7 +89,7 @@ router.post('/setAccount', apiKeyVerify, async (req, res) => {
       res.status(500).json({ error: '账号创建失败' })
     }
   } catch (error) {
-    console.error('创建账号失败:', error)
+    logger.error('创建账号失败', 'ACCOUNT', '', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -119,7 +120,7 @@ router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
       res.status(500).json({ error: '账号删除失败' })
     }
   } catch (error) {
-    console.error('删除账号失败:', error)
+    logger.error('删除账号失败', 'ACCOUNT', '', error)
     res.status(500).json({ error: error.message })
   }
 })
@@ -164,7 +165,70 @@ router.post('/setAccounts', apiKeyVerify, async (req, res) => {
 
     res.json({ message: '账号批量添加任务提交成功' })
   } catch (error) {
-    console.error('批量创建账号失败:', error)
+    logger.error('批量创建账号失败', 'ACCOUNT', '', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+/**
+ * POST /refreshAccount
+ * 刷新单个账号的令牌
+ *
+ * @param {string} email 邮箱
+ * @returns {Object} 刷新结果
+ */
+router.post('/refreshAccount', apiKeyVerify, async (req, res) => {
+  try {
+    const { email } = req.body
+
+    if (!email) {
+      return res.status(400).json({ error: '邮箱不能为空' })
+    }
+
+    // 检查账号是否存在
+    const exists = accountManager.accountTokens.find(item => item.email === email)
+    if (!exists) {
+      return res.status(404).json({ error: '账号不存在' })
+    }
+
+    // 刷新账号令牌
+    const success = await accountManager.refreshAccountToken(email)
+
+    if (success) {
+      res.json({
+        message: '账号令牌刷新成功',
+        email: email
+      })
+    } else {
+      res.status(500).json({ error: '账号令牌刷新失败' })
+    }
+  } catch (error) {
+    logger.error('刷新账号令牌失败', 'ACCOUNT', '', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+/**
+ * POST /refreshAllAccounts
+ * 刷新所有账号的令牌
+ *
+ * @param {number} thresholdHours 过期阈值（小时），默认24小时
+ * @returns {Object} 刷新结果
+ */
+router.post('/refreshAllAccounts', apiKeyVerify, async (req, res) => {
+  try {
+    const { thresholdHours = 24 } = req.body
+
+    // 执行批量刷新
+    const refreshedCount = await accountManager.autoRefreshTokens(thresholdHours)
+
+    res.json({
+      message: '批量刷新完成',
+      refreshedCount: refreshedCount,
+      thresholdHours: thresholdHours
+    })
+  } catch (error) {
+    logger.error('批量刷新账号令牌失败', 'ACCOUNT', '', error)
     res.status(500).json({ error: error.message })
   }
 })

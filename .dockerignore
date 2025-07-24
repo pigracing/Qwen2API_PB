@@ -91,5 +91,10 @@ npm-debug.log
 .npm
 .node_repl_history
 .yarn-integrity
-yarn.lock  # 如果使用npm
-package-lock.json  # 如果使用yarn
+yarn.lock
+package-lock.json
+
+data/
+docs/
+.gitignore
+.github/

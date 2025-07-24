@@ -2,6 +2,7 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const config = require('./config/index.js')
 const cors = require('cors')
+const { logger } = require('./utils/logger')
 const app = express()
 const path = require('path')
 const fs = require('fs')
@@ -22,7 +23,7 @@ app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }))
 app.use(cors())
 // 处理错误中间件
 app.use((err, req, res, next) => {
-  console.error(err.stack)
+  logger.error('服务器内部错误', 'SERVER', '', err)
   res.status(500).send('服务器内部错误')
 })
 // API路由
@@ -37,31 +38,35 @@ app.use(express.static(path.join(__dirname, '../public/dist')))
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/dist/index.html'), (err) => {
     if (err) {
-      console.error("管理页面加载失败", err)
+      logger.error('管理页面加载失败', 'SERVER', '', err)
       res.status(500).send('服务器内部错误')
     }
   })
 })
 
 
-const startInfo = `
--------------------------------------------------------------------
-监听地址：${process.env.LISTEN_ADDRESS ? process.env.LISTEN_ADDRESS : 'localhost'}
-服务端口：${config.listenPort}
-接口路径：${config.apiPrefix ? config.apiPrefix : '未设置'}
-思考输出：${config.outThink ? '开启' : '关闭'}
-搜索显示：${config.searchInfoMode === 'table' ? '表格' : '文本'}
-数据保存模式：${config.dataSaveMode}
-开源地址：https://github.com/Rfym21/Qwen2API
-电报群聊：https://t.me/nodejs_project
--------------------------------------------------------------------
-`
+// 服务器启动信息
+const serverInfo = {
+  address: config.listenAddress || 'localhost',
+  port: config.listenPort,
+  apiPrefix: config.apiPrefix || '未设置',
+  outThink: config.outThink ? '开启' : '关闭',
+  searchInfoMode: config.searchInfoMode === 'table' ? '表格' : '文本',
+  dataSaveMode: config.dataSaveMode,
+  logLevel: config.logLevel,
+  enableFileLog: config.enableFileLog
+}
+
 if (config.listenAddress) {
   app.listen(config.listenPort, config.listenAddress, () => {
-    console.log(startInfo)
+    logger.server('服务器启动成功', 'SERVER', serverInfo)
+    logger.info('开源地址: https://github.com/Rfym21/Qwen2API', 'INFO')
+    logger.info('电报群聊: https://t.me/nodejs_project', 'INFO')
   })
 } else {
   app.listen(config.listenPort, () => {
-    console.log(startInfo)
+    logger.server('服务器启动成功', 'SERVER', serverInfo)
+    logger.info('开源地址: https://github.com/Rfym21/Qwen2API', 'INFO')
+    logger.info('电报群聊: https://t.me/nodejs_project', 'INFO')
   })
 }
