@@ -142,10 +142,11 @@ class TokenManager {
    * 批量刷新即将过期的令牌
    * @param {Array} accounts - 账户列表
    * @param {number} thresholdHours - 过期阈值（小时）
+   * @param {Function} onEachRefresh - 每次刷新成功后的回调函数 (updatedAccount, index, total) => void
    * @returns {Promise<Object>} 刷新结果 {refreshed: Array, failed: Array}
    */
-  async batchRefreshTokens(accounts, thresholdHours = 24) {
-    const needsRefresh = accounts.filter(account => 
+  async batchRefreshTokens(accounts, thresholdHours = 24, onEachRefresh = null) {
+    const needsRefresh = accounts.filter(account =>
       this.isTokenExpiringSoon(account.token, thresholdHours)
     )
 
@@ -155,18 +156,29 @@ class TokenManager {
     }
 
     logger.info(`发现 ${needsRefresh.length} 个令牌需要刷新`, 'TOKEN')
-    
+
     const refreshed = []
     const failed = []
 
-    for (const account of needsRefresh) {
+    for (let i = 0; i < needsRefresh.length; i++) {
+      const account = needsRefresh[i]
       const updatedAccount = await this.refreshToken(account)
+
       if (updatedAccount) {
         refreshed.push(updatedAccount)
+
+        // 如果提供了回调函数，立即调用
+        if (onEachRefresh && typeof onEachRefresh === 'function') {
+          try {
+            await onEachRefresh(updatedAccount, i + 1, needsRefresh.length)
+          } catch (error) {
+            logger.error(`刷新回调函数执行失败 (${account.email})`, 'TOKEN', '', error)
+          }
+        }
       } else {
         failed.push(account)
       }
-      
+
       // 添加延迟避免请求过于频繁
       await this._delay(1000)
     }

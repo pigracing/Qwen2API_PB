@@ -140,28 +140,65 @@ class Account {
 
     logger.info('开始自动刷新令牌...', 'TOKEN', '🔄')
 
-    const result = await this.tokenManager.batchRefreshTokens(this.accountTokens, thresholdHours)
+    // 获取需要刷新的账户
+    const needsRefresh = this.accountTokens.filter(account =>
+      this.tokenManager.isTokenExpiringSoon(account.token, thresholdHours)
+    )
 
-    // 更新内存中的账户数据
-    result.refreshed.forEach(updatedAccount => {
-      const index = this.accountTokens.findIndex(acc => acc.email === updatedAccount.email)
-      if (index !== -1) {
-        this.accountTokens[index] = updatedAccount
-      }
-    })
-
-    // 保存更新后的数据
-    if (result.refreshed.length > 0) {
-      await this._saveUpdatedAccounts(result.refreshed)
-      this.accountRotator.setAccounts(this.accountTokens)
+    if (needsRefresh.length === 0) {
+      logger.info('没有需要刷新的令牌', 'TOKEN')
+      return 0
     }
 
-    // 处理失败的账户
-    result.failed.forEach(account => {
-      this.accountRotator.recordFailure(account.email)
-    })
+    logger.info(`发现 ${needsRefresh.length} 个令牌需要刷新`, 'TOKEN')
 
-    return result.refreshed.length
+    let successCount = 0
+    let failedCount = 0
+
+    // 逐个刷新账户，每次成功后立即保存
+    for (const account of needsRefresh) {
+      try {
+        const updatedAccount = await this.tokenManager.refreshToken(account)
+        if (updatedAccount) {
+          // 立即更新内存中的账户数据
+          const index = this.accountTokens.findIndex(acc => acc.email === account.email)
+          if (index !== -1) {
+            this.accountTokens[index] = updatedAccount
+          }
+
+          // 立即保存到持久化存储
+          await this.dataPersistence.saveAccount(account.email, {
+            password: updatedAccount.password,
+            token: updatedAccount.token,
+            expires: updatedAccount.expires
+          })
+
+          // 重置失败计数
+          this.accountRotator.resetFailures(account.email)
+          successCount++
+
+          logger.info(`账户 ${account.email} 令牌刷新并保存成功 (${successCount}/${needsRefresh.length})`, 'TOKEN', '✅')
+        } else {
+          // 记录失败的账户
+          this.accountRotator.recordFailure(account.email)
+          failedCount++
+          logger.error(`账户 ${account.email} 令牌刷新失败 (${failedCount} 个失败)`, 'TOKEN', '❌')
+        }
+      } catch (error) {
+        this.accountRotator.recordFailure(account.email)
+        failedCount++
+        logger.error(`账户 ${account.email} 刷新过程中出错`, 'TOKEN', '', error)
+      }
+
+      // 添加延迟避免请求过于频繁
+      await this._delay(1000)
+    }
+
+    // 更新轮询器
+    this.accountRotator.setAccounts(this.accountTokens)
+
+    logger.success(`令牌刷新完成: 成功 ${successCount} 个，失败 ${failedCount} 个`, 'TOKEN')
+    return successCount
   }
 
   /**
@@ -466,6 +503,15 @@ class Account {
       return true
     }
     return false
+  }
+
+  /**
+   * 延迟函数
+   * @param {number} ms - 延迟毫秒数
+   * @private
+   */
+  async _delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms))
   }
 
   /**
