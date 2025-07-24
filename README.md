@@ -195,7 +195,7 @@ Qwen2API/
         └── favicon.png
 ```
 
-## �📖 API 文档
+## 📖 API 文档
 
 ### 🔍 获取模型列表
 
