@@ -2,6 +2,9 @@ node_modules
 package-lock.json
 .env
 data/data.json
-caches/*
-logs/*
+data
+caches
+logs/
 *.log
+pkg_dist/*
+pkg_dist/

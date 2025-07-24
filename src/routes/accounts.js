@@ -233,5 +233,27 @@ router.post('/refreshAllAccounts', apiKeyVerify, async (req, res) => {
   }
 })
 
+/**
+ * POST /forceRefreshAllAccounts
+ * 强制刷新所有账号的令牌（不管是否即将过期）
+ *
+ * @returns {Object} 刷新结果
+ */
+router.post('/forceRefreshAllAccounts', apiKeyVerify, async (req, res) => {
+  try {
+    // 强制刷新所有账号（设置阈值为很大的值，确保所有账号都会被刷新）
+    const refreshedCount = await accountManager.autoRefreshTokens(8760) // 365天
+
+    res.json({
+      message: '强制刷新完成',
+      refreshedCount: refreshedCount,
+      totalAccounts: accountManager.getAllAccountKeys().length
+    })
+  } catch (error) {
+    logger.error('强制刷新账号令牌失败', 'ACCOUNT', '', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
 
 module.exports = router

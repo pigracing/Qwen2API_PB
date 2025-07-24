@@ -1,6 +1,5 @@
-const uuid = require('uuid')
 const { logger } = require('./logger')
-const { sha256Encrypt } = require('./tools.js')
+const { sha256Encrypt, generateUUID } = require('./tools.js')
 const { uploadFileToQwenOss } = require('./upload.js')
 const accountManager = require('./account.js')
 const CacheManager = require('./img-caches.js')
@@ -101,7 +100,7 @@ const parserMessages = async (messages, thinking_config, chat_type) => {
               // 截取文本
               const fileType = base64.match(regex)
               const fileExtension = fileType && fileType[1] ? fileType[1].split('/')[1] || 'png' : 'png'
-              const filename = `${uuid.v4()}.${fileExtension}`
+              const filename = `${generateUUID()}.${fileExtension}`
               base64 = base64.replace(regex, '')
               const signature = sha256Encrypt(base64)
 

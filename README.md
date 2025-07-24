@@ -5,6 +5,7 @@
 [![Version](https://img.shields.io/badge/version-2025.07.24.12.00-blue.svg)](https://github.com/Rfym21/Qwen2API)
 [![Node.js](https://img.shields.io/badge/Node.js-18+-green.svg)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/Docker-supported-blue.svg)](https://hub.docker.com/r/rfym21/qwen2api)
+[![Binary](https://img.shields.io/badge/Binary-Available-orange.svg)](https://github.com/Rfym21/Qwen2API/releases)
 
 [🔗 加入交流群](https://t.me/nodejs_project) | [📖 文档](#api-文档) | [🐳 Docker 部署](#docker-部署)
 
@@ -14,9 +15,11 @@
 
 ### 环境要求
 
-- Node.js 18+
+- Node.js 18+ (源码部署时需要)
 - Docker (可选)
 - Redis (可选，用于数据持久化)
+
+> 💡 **提示**: 如果使用二进制文件部署，无需安装 Node.js 环境
 
 ### ⚙️ 环境配置
 
@@ -31,6 +34,11 @@ SERVICE_PORT=3000             # 服务端口
 # 🔐 安全配置
 API_KEY=sk-123456             # API 密钥 (必填)
 ACCOUNTS=                     # 账户配置 (格式: user1:pass1,user2:pass2)
+
+# 🚀 PM2 多进程配置
+PM2_INSTANCES=1               # PM2进程数量 (1/数字/max)
+PM2_MAX_MEMORY=1G             # PM2内存限制 (100M/1G/2G等)
+                              # 注意: PM2集群模式下所有进程共用同一个端口
 
 # 🔍 功能配置
 SEARCH_INFO_MODE=table        # 搜索信息展示模式 (table/text)
@@ -49,6 +57,8 @@ REDIS_URL=                    # Redis 连接地址 (可选)
 | `LISTEN_ADDRESS` | 服务监听地址 | `localhost` 或 `0.0.0.0` |
 | `SERVICE_PORT` | 服务运行端口 | `3000` |
 | `API_KEY` | API 访问密钥 (必填) | `sk-your-secret-key` |
+| `PM2_INSTANCES` | PM2进程数量 | `1`/`4`/`max` |
+| `PM2_MAX_MEMORY` | PM2内存限制 | `100M`/`1G`/`2G` |
 | `SEARCH_INFO_MODE` | 搜索结果展示格式 | `table` 或 `text` |
 | `OUTPUT_THINK` | 是否显示 AI 思考过程 | `true` 或 `false` |
 | `DATA_SAVE_MODE` | 数据持久化方式 | `none`/`file`/`redis` |
@@ -107,12 +117,56 @@ npm install
 cp .env.example .env
 # 编辑 .env 文件
 
-# 启动服务
+# 智能启动 (推荐 - 自动判断单进程/多进程)
 npm start
 
 # 开发模式
 npm run dev
 ```
+
+### 🚀 PM2 多进程部署
+
+使用 PM2 进行生产环境多进程部署，提供更好的性能和稳定性。
+
+**重要说明**: PM2 集群模式下，所有进程共用同一个端口，PM2 会自动进行负载均衡。
+
+### 🤖 智能启动模式
+
+使用 `npm start` 可以自动判断启动方式：
+
+- 当 `PM2_INSTANCES=1` 时，使用单进程模式
+- 当 `PM2_INSTANCES>1` 时，使用 Node.js 集群模式
+- 自动限制进程数不超过 CPU 核心数
+
+
+### 📦 二进制文件部署
+
+使用 pkg 打包的二进制文件，无需安装 Node.js 环境即可运行：
+
+#### 下载预编译二进制文件
+
+从 [GitHub Releases](https://github.com/Rfym21/Qwen2API/releases) 下载对应平台的二进制文件：
+
+- **Windows**: `qwen2api-win.exe`
+- **Linux**: `qwen2api-linux`
+- **macOS**: `qwen2api-macos`
+
+#### 使用方法
+
+1. 下载对应平台的二进制文件
+2. 在同目录下创建 `.env` 配置文件
+3. 直接运行二进制文件
+
+```bash
+# Windows
+./qwen2api-win.exe
+
+# Linux/macOS
+chmod +x qwen2api-linux  # 或 qwen2api-macos
+./qwen2api-linux         # 或 ./qwen2api-macos
+```
+
+> 💡 **注意**: 二进制文件会自动读取同目录下的 `.env` 配置文件，请确保配置文件存在且格式正确。
 
 ### ☁️ Hugging Face 部署
 
@@ -134,21 +188,21 @@ Qwen2API/
 ├── README.md
 ├── docker-compose.yml
 ├── docker-compose-redis.yml
+├── ecosystem.config.js              # PM2配置文件
 ├── package.json
 │
 ├── caches/                          # 缓存文件目录
 ├── data/                            # 数据文件目录
 │   └── data.json
 │
-├── docs/                            # 文档目录
-│   └── images/
-│
 ├── src/                             # 后端源代码目录
 │   ├── server.js                    # 主服务器文件
+│   ├── start.js                     # 智能启动脚本 (自动判断单进程/多进程)
 │   ├── config/
 │   │   └── index.js                 # 配置文件
 │   ├── controllers/                 # 控制器目录
 │   │   ├── chat.js
+│   │   ├── chat-optimized.js        # 优化版聊天控制器
 │   │   └── models.js
 │   ├── middlewares/                 # 中间件目录
 │   │   ├── authorization.js
@@ -167,6 +221,7 @@ Qwen2API/
 │       ├── chat-helpers.js
 │       ├── data-persistence.js
 │       ├── img-caches.js
+│       ├── logger.js                # 日志工具
 │       ├── model-utils.js
 │       ├── redis.js
 │       ├── request.js
@@ -176,23 +231,7 @@ Qwen2API/
 │       └── upload.js
 │
 └── public/                          # 前端项目目录
-    ├── package.json
-    ├── vite.config.js
-    ├── tailwind.config.js
-    ├── dist/                        # 构建输出目录
-    ├── src/                         # 前端源代码目录
-    │   ├── App.vue                  # 主应用组件
-    │   ├── main.js                  # 入口文件
-    │   ├── style.css                # 样式文件
-    │   ├── assets/
-    │   ├── routes/
-    │   │   └── index.js             # 路由配置
-    │   └── views/                   # 视图组件目录
-    │       ├── auth.vue
-    │       ├── dashboard.vue
-    │       └── settings.vue
-    └── public/
-        └── favicon.png
+    └── dist/                        # 编译后的前端文件
 ```
 
 ## 📖 API 文档
@@ -207,7 +246,7 @@ Authorization: Bearer sk-your-api-key
 ```
 
 ```http
-GET /v1/models (免认证)
+GET /models (免认证)
 ```
 
 **响应示例:**

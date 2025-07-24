@@ -1,4 +1,4 @@
-const uuid = require('uuid')
+const { generateUUID } = require('../utils/tools.js')
 const { isChatType, isThinkingEnabled, parserModel, parserMessages } = require('../utils/chat-helpers.js')
 const { logger } = require('../utils/logger')
 
@@ -15,9 +15,9 @@ const processRequestBody = async (req, res, next) => {
       "chat_type": "t2t",
       "model": "qwen3-235b-a22b",
       "messages": [],
-      "session_id": uuid.v4(),
-      "chat_id": uuid.v4(),
-      "id": uuid.v4(),
+      "session_id": generateUUID(),
+      "chat_id": generateUUID(),
+      "id": generateUUID(),
       "sub_chat_type": "t2t",
       "chat_mode": "normal"
     }

@@ -1,4 +1,4 @@
-const uuid = require('uuid')
+const { generateUUID } = require('../utils/tools.js')
 const { isJson } = require('../utils/tools.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
@@ -20,7 +20,7 @@ const CHUNK_DELIMITER = '\n\n'
  */
 const handleStreamResponseOptimized = async (res, response, enable_thinking, enable_web_search) => {
   try {
-    const message_id = uuid.v4()
+    const message_id = generateUUID()
     const decoder = new TextDecoder('utf-8')
     
     // 状态变量

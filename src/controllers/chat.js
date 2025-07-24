@@ -1,5 +1,4 @@
-const uuid = require('uuid')
-const { isJson } = require('../utils/tools.js')
+const { isJson, generateUUID } = require('../utils/tools.js')
 const { sendChatRequest } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
@@ -37,7 +36,7 @@ const setResponseHeaders = (res, stream) => {
  */
 const handleStreamResponse = async (res, response, enable_thinking, enable_web_search) => {
   try {
-    const message_id = uuid.v4()
+    const message_id = generateUUID()
     const decoder = new TextDecoder('utf-8')
     let web_search_info = null
     let thinking_start = false
@@ -163,7 +162,7 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
 const handleNonStreamResponse = async (res, response, enable_thinking, enable_web_search, model) => {
   try {
     const bodyTemplate = {
-      "id": `chatcmpl-${uuid.v4()}`,
+      "id": `chatcmpl-${generateUUID()}`,
       "object": "chat.completion",
       "created": new Date().getTime(),
       "model": model,

@@ -36,9 +36,19 @@ const JwtDecode = (token) => {
   }
 }
 
+/**
+ * 生成UUID v4
+ * 使用Node.js内置的crypto.randomUUID()
+ * @returns {string} UUID v4字符串
+ */
+const generateUUID = () => {
+  return crypto.randomUUID()
+}
+
 module.exports = {
   isJson,
   sleep,
   sha256Encrypt,
-  JwtDecode
+  JwtDecode,
+  generateUUID
 }

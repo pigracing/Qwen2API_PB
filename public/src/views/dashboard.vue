@@ -3,7 +3,7 @@
     <div class="container mx-auto">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 px-4 space-y-4 md:space-y-0 pt-5">
         <h1 class="text-4xl font-bold">Token Manager <span class="text-gray-500 text-sm">by 兜豆子</span></h1>
-        <div class="flex flex-col sm:flex-row w-full md:w-auto space-y-3 sm:space-y-0 sm:space-x-4">
+        <div class="flex flex-col sm:flex-row w-full md:w-auto space-y-3 sm:space-y-0 sm:space-x-2 lg:space-x-4">
           <button @click="showAddModal = true"
                   class="action-button font-bold border border-green-200 bg-green-50 text-green-900 px-4 py-2 rounded-xl shadow-sm hover:bg-green-100 hover:border-green-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
             添加账号
@@ -24,6 +24,23 @@
               <span>刷新中...</span>
             </span>
             <span v-else>一键刷新</span>
+          </button>
+          <button @click="forceRefreshAllAccounts"
+                  :disabled="isForceRefreshingAll"
+                  :class="[
+                    'action-button font-bold px-4 py-2 rounded-xl shadow-sm transition-all duration-300 transform active:translate-y-0',
+                    isForceRefreshingAll
+                      ? 'bg-pink-400 text-white border-pink-400 refreshing-button-pink cursor-not-allowed transform-none'
+                      : 'macaron-pink-button text-pink-800 hover:-translate-y-1'
+                  ]">
+            <span v-if="isForceRefreshingAll" class="flex items-center space-x-2">
+              <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <span>强制刷新中...</span>
+            </span>
+            <span v-else>强制刷新</span>
           </button>
           <button @click="exportAccounts"
                   class="action-button font-bold border border-yellow-200 bg-yellow-50 text-yellow-900 px-4 py-2 rounded-xl shadow-sm hover:bg-yellow-100 hover:border-yellow-400 transition-all duration-300 transform hover:-translate-y-1 active:translate-y-0">
@@ -322,6 +339,7 @@ const showDeleteAllConfirm = ref(false)
 
 // 刷新相关
 const isRefreshingAll = ref(false)
+const isForceRefreshingAll = ref(false)
 const refreshingTokens = ref([])
 
 // Toast 通知
@@ -564,6 +582,31 @@ const refreshAllAccounts = async () => {
     showToast('批量刷新失败: ' + error.message, 'error')
   } finally {
     isRefreshingAll.value = false
+  }
+}
+
+const forceRefreshAllAccounts = async () => {
+  if (isForceRefreshingAll.value) return
+
+  if (!confirm('确定要强制刷新所有账号的令牌吗？这将刷新所有账号，不管它们是否即将过期，可能需要较长时间。')) return
+
+  isForceRefreshingAll.value = true
+
+  try {
+    const response = await axios.post('/api/forceRefreshAllAccounts', {}, {
+      headers: {
+        'Authorization': localStorage.getItem('apiKey') || ''
+      }
+    })
+
+    // 刷新成功后重新获取账号列表
+    await getTokens()
+    showToast(`强制刷新完成，成功刷新了 ${response.data.refreshedCount} 个账号`)
+  } catch (error) {
+    console.error('强制刷新失败:', error)
+    showToast('强制刷新失败: ' + error.message, 'error')
+  } finally {
+    isForceRefreshingAll.value = false
   }
 }
 
@@ -810,6 +853,19 @@ onMounted(() => {
   }
 }
 
+/* 马卡龙粉色刷新按钮动画 */
+@keyframes refresh-pulse-pink {
+  0% {
+    box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(236, 72, 153, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(236, 72, 153, 0);
+  }
+}
+
 .action-button:hover {
   animation: refresh-pulse-purple 1.5s infinite;
 }
@@ -828,6 +884,14 @@ onMounted(() => {
   color: white;
   animation: refresh-pulse-green 1.5s infinite;
   box-shadow: 0 4px 15px rgba(74, 222, 128, 0.3);
+}
+
+/* 刷新中的按钮样式 - 马卡龙粉色 */
+.refreshing-button-pink {
+  background: linear-gradient(45deg, #f472b6, #ec4899);
+  color: white;
+  animation: refresh-pulse-pink 1.5s infinite;
+  box-shadow: 0 4px 15px rgba(236, 72, 153, 0.3);
 }
 
 /* 马卡龙色系按钮增强效果 */
@@ -888,5 +952,38 @@ onMounted(() => {
   border-color: #c4b5fd;
   transform: translateY(-2px);
   box-shadow: 0 4px 15px rgba(168, 85, 247, 0.2);
+}
+
+/* 马卡龙粉色按钮样式 */
+.macaron-pink-button {
+  background: linear-gradient(135deg, #fdf2f8, #fce7f3);
+  border: 1px solid #f9a8d4;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.macaron-pink-button:hover {
+  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+  border-color: #f472b6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(236, 72, 153, 0.2);
+}
+
+/* 响应式优化 */
+@media (max-width: 640px) {
+  .action-button {
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .container {
+    padding: 0 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .action-button {
+    font-size: 0.8rem;
+    padding: 0.4rem 0.6rem;
+  }
 }
 </style>

@@ -1,8 +1,8 @@
 const axios = require('axios')
 const OSS = require('ali-oss')
-const uuid = require('uuid')
 const mimetypes = require('mime-types')
 const { logger } = require('./logger')
+const { generateUUID } = require('./tools.js')
 
 /**
  * 文件上传管理器
@@ -94,7 +94,7 @@ const requestStsToken = async (filename, filesize, filetypeSimple, authToken, re
       throw new Error(`文件大小超出限制，最大允许 ${UPLOAD_CONFIG.maxFileSize / 1024 / 1024}MB`)
     }
 
-    const requestId = uuid.v4()
+    const requestId = generateUUID()
     const bearerToken = authToken.startsWith('Bearer ') ? authToken : `Bearer ${authToken}`
 
     const headers = {
