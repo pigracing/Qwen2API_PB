@@ -1,5 +1,5 @@
-const { generateUUID } = require('../utils/tools.js')
-const { isJson } = require('../utils/tools.js')
+const { generateUUID, isJson } = require('../utils/tools.js')
+const { createUsageObject } = require('../utils/precise-tokenizer.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
 const { logger } = require('../utils/logger')
@@ -17,19 +17,41 @@ const CHUNK_DELIMITER = '\n\n'
  * @param {object} response - 上游响应流
  * @param {boolean} enable_thinking - 是否启用思考模式
  * @param {boolean} enable_web_search - 是否启用网络搜索
+ * @param {object} requestBody - 原始请求体，用于提取prompt信息
  */
-const handleStreamResponseOptimized = async (res, response, enable_thinking, enable_web_search) => {
+const handleStreamResponseOptimized = async (res, response, enable_thinking, enable_web_search, requestBody = null) => {
   try {
     const message_id = generateUUID()
     const decoder = new TextDecoder('utf-8')
-    
+
     // 状态变量
     let web_search_info = null
     let thinking_start = false
     let thinking_end = false
     let buffer = ''
     let bufferSize = 0
-    
+
+    // Token消耗量统计
+    let totalTokens = {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0
+    }
+    let completionContent = '' // 收集完整的回复内容用于token估算
+
+    // 提取prompt文本用于token估算
+    let promptText = ''
+    if (requestBody && requestBody.messages) {
+      promptText = requestBody.messages.map(msg => {
+        if (typeof msg.content === 'string') {
+          return msg.content
+        } else if (Array.isArray(msg.content)) {
+          return msg.content.map(item => item.text || '').join('')
+        }
+        return ''
+      }).join('\n')
+    }
+
     // 预编译的模板对象，减少重复创建
     const baseTemplate = {
       id: `chatcmpl-${message_id}`,
@@ -89,8 +111,17 @@ const handleStreamResponseOptimized = async (res, response, enable_thinking, ena
         return null
       }
 
+      // 提取真实的usage信息（如果上游API提供）
+      if (decodeJson.usage) {
+        totalTokens = {
+          prompt_tokens: decodeJson.usage.prompt_tokens || totalTokens.prompt_tokens,
+          completion_tokens: decodeJson.usage.completion_tokens || totalTokens.completion_tokens,
+          total_tokens: decodeJson.usage.total_tokens || totalTokens.total_tokens
+        }
+      }
+
       const delta = decodeJson.choices[0].delta
-      
+
       // 处理 web_search 信息
       if (delta.name === 'web_search' && delta.extra?.web_search_info) {
         web_search_info = delta.extra.web_search_info
@@ -103,6 +134,7 @@ const handleStreamResponseOptimized = async (res, response, enable_thinking, ena
       }
 
       let content = delta.content
+      completionContent += content // 累计完整内容用于token估算
 
       // 处理思考阶段
       if (delta.phase === 'think' && !thinking_start) {
@@ -114,7 +146,7 @@ const handleStreamResponseOptimized = async (res, response, enable_thinking, ena
           content = `<think>\n\n${content}`
         }
       }
-      
+
       // 处理回答阶段
       if (delta.phase === 'answer' && !thinking_end && thinking_start) {
         thinking_end = true
@@ -168,14 +200,39 @@ const handleStreamResponseOptimized = async (res, response, enable_thinking, ena
     response.on('end', async () => {
       try {
         // 处理最终的搜索信息
-        if ((config.outThink === false || !enable_thinking) && 
-            web_search_info && 
+        if ((config.outThink === false || !enable_thinking) &&
+            web_search_info &&
             config.searchInfoMode === "text") {
-          
+
           const webSearchTable = await accountManager.generateMarkdownTable(web_search_info, "text")
           writeResponse(`\n\n---\n${webSearchTable}`)
         }
-        
+
+        // 如果没有从上游API获取到真实的usage数据，则使用tiktoken计算
+        if (totalTokens.prompt_tokens === 0 && totalTokens.completion_tokens === 0) {
+          totalTokens = createUsageObject(requestBody?.messages || promptText, completionContent, null)
+          logger.info(`使用tiktoken计算 - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+        } else {
+          logger.info(`使用上游真实Token - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+        }
+
+        // 发送最终的finish chunk，包含finish_reason
+        baseTemplate.created = Date.now()
+        baseTemplate.choices[0].delta = {}
+        baseTemplate.choices[0].finish_reason = "stop"
+        res.write(`data: ${JSON.stringify(baseTemplate)}\n\n`)
+
+        // 发送usage信息chunk（符合OpenAI API标准）
+        const usageTemplate = {
+          id: `chatcmpl-${message_id}`,
+          object: "chat.completion.chunk",
+          created: Date.now(),
+          choices: [],
+          usage: totalTokens
+        }
+        res.write(`data: ${JSON.stringify(usageTemplate)}\n\n`)
+
+        // 发送结束标记
         res.write(`data: [DONE]\n\n`)
         res.end()
       } catch (e) {
