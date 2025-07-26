@@ -8,3 +8,4 @@ logs/
 *.log
 pkg_dist/*
 pkg_dist/
+.idea

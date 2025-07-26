@@ -1,4 +1,5 @@
 const { isJson, generateUUID } = require('../utils/tools.js')
+const { createUsageObject } = require('../utils/precise-tokenizer.js')
 const { sendChatRequest } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
@@ -33,8 +34,9 @@ const setResponseHeaders = (res, stream) => {
  * @param {object} response - 上游响应流
  * @param {boolean} enable_thinking - 是否启用思考模式
  * @param {boolean} enable_web_search - 是否启用网络搜索
+ * @param {object} requestBody - 原始请求体，用于提取prompt信息
  */
-const handleStreamResponse = async (res, response, enable_thinking, enable_web_search) => {
+const handleStreamResponse = async (res, response, enable_thinking, enable_web_search, requestBody = null) => {
   try {
     const message_id = generateUUID()
     const decoder = new TextDecoder('utf-8')
@@ -42,6 +44,27 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
     let thinking_start = false
     let thinking_end = false
     let buffer = ''
+
+    // Token消耗量统计
+    let totalTokens = {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0
+    }
+    let completionContent = '' // 收集完整的回复内容用于token估算
+
+    // 提取prompt文本用于token估算
+    let promptText = ''
+    if (requestBody && requestBody.messages) {
+      promptText = requestBody.messages.map(msg => {
+        if (typeof msg.content === 'string') {
+          return msg.content
+        } else if (Array.isArray(msg.content)) {
+          return msg.content.map(item => item.text || '').join('')
+        }
+        return ''
+      }).join('\n')
+    }
 
     response.on('data', async (chunk) => {
       const decodeText = decoder.decode(chunk, { stream: true })
@@ -75,14 +98,27 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
             continue
           }
 
+          // 提取真实的usage信息（如果上游API提供）
+          if (decodeJson.usage) {
+            totalTokens = {
+              prompt_tokens: decodeJson.usage.prompt_tokens || totalTokens.prompt_tokens,
+              completion_tokens: decodeJson.usage.completion_tokens || totalTokens.completion_tokens,
+              total_tokens: decodeJson.usage.total_tokens || totalTokens.total_tokens
+            }
+          }
+
           // 处理 web_search 信息
-          if (decodeJson.choices[0].delta.name === 'web_search') {
+          if (decodeJson.choices[0].delta && decodeJson.choices[0].delta.name === 'web_search') {
             web_search_info = decodeJson.choices[0].delta.extra.web_search_info
           }
 
-          if (!decodeJson.choices[0].delta.content || (decodeJson.choices[0].delta.phase !== 'think' && decodeJson.choices[0].delta.phase !== 'answer')) return
+          if (!decodeJson.choices[0].delta || !decodeJson.choices[0].delta.content ||
+              (decodeJson.choices[0].delta.phase !== 'think' && decodeJson.choices[0].delta.phase !== 'answer')) {
+            continue
+          }
 
           let content = decodeJson.choices[0].delta.content
+          completionContent += content // 累计完整内容用于token估算
 
           if (decodeJson.choices[0].delta.phase === 'think' && !thinking_start) {
             thinking_start = true
@@ -122,6 +158,7 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
 
     response.on('end', async () => {
       try {
+        // 处理最终的搜索信息
         if ((config.outThink === false || !enable_thinking) && web_search_info && config.searchInfoMode === "text") {
           const webSearchTable = await accountManager.generateMarkdownTable(web_search_info, "text")
           res.write(`data: ${JSON.stringify({
@@ -133,11 +170,50 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
                 "index": 0,
                 "delta": {
                   "content": `\n\n---\n${webSearchTable}`
-                }
+                },
+                "finish_reason": null
               }
             ]
           })}\n\n`)
         }
+
+        // 计算最终的token使用量
+        if (totalTokens.prompt_tokens === 0 && totalTokens.completion_tokens === 0) {
+          totalTokens = createUsageObject(requestBody?.messages || promptText, completionContent, null)
+          logger.info(`流式使用tiktoken计算 - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+        } else {
+          logger.info(`流式使用上游真实Token - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+        }
+
+        // 确保token数量的有效性
+        totalTokens.prompt_tokens = Math.max(0, totalTokens.prompt_tokens || 0)
+        totalTokens.completion_tokens = Math.max(0, totalTokens.completion_tokens || 0)
+        totalTokens.total_tokens = totalTokens.prompt_tokens + totalTokens.completion_tokens
+
+        // 发送最终的finish chunk，包含finish_reason
+        res.write(`data: ${JSON.stringify({
+          "id": `chatcmpl-${message_id}`,
+          "object": "chat.completion.chunk",
+          "created": new Date().getTime(),
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": "stop"
+            }
+          ]
+        })}\n\n`)
+
+        // 发送usage信息chunk（符合OpenAI API标准）
+        res.write(`data: ${JSON.stringify({
+          "id": `chatcmpl-${message_id}`,
+          "object": "chat.completion.chunk",
+          "created": new Date().getTime(),
+          "choices": [],
+          "usage": totalTokens
+        })}\n\n`)
+
+        // 发送结束标记
         res.write(`data: [DONE]\n\n`)
         res.end()
       } catch (e) {
@@ -158,9 +234,41 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
  * @param {boolean} enable_thinking - 是否启用思考模式
  * @param {boolean} enable_web_search - 是否启用网络搜索
  * @param {string} model - 模型名称
+ * @param {object} requestBody - 原始请求体，用于提取prompt信息
  */
-const handleNonStreamResponse = async (res, response, enable_thinking, enable_web_search, model) => {
+const handleNonStreamResponse = async (res, response, enable_thinking, enable_web_search, model, requestBody = null) => {
   try {
+    const content = response.choices[0].message.content
+
+    // 提取prompt文本用于token估算
+    let promptText = ''
+    if (requestBody && requestBody.messages) {
+      promptText = requestBody.messages.map(msg => {
+        if (typeof msg.content === 'string') {
+          return msg.content
+        } else if (Array.isArray(msg.content)) {
+          return msg.content.map(item => item.text || '').join('')
+        }
+        return ''
+      }).join('\n')
+    }
+
+    // 尝试从上游响应中提取真实的usage数据
+    let usage = response.usage || null
+
+    // 计算token使用量
+    if (!usage) {
+      usage = createUsageObject(requestBody?.messages || promptText, content, null)
+      logger.info(`非流式使用tiktoken计算 - Prompt: ${usage.prompt_tokens}, Completion: ${usage.completion_tokens}, Total: ${usage.total_tokens}`, 'CHAT')
+    } else {
+      logger.info(`非流式使用上游真实Token - Prompt: ${usage.prompt_tokens}, Completion: ${usage.completion_tokens}, Total: ${usage.total_tokens}`, 'CHAT')
+    }
+
+    // 确保token数量的有效性
+    usage.prompt_tokens = Math.max(0, usage.prompt_tokens || 0)
+    usage.completion_tokens = Math.max(0, usage.completion_tokens || 0)
+    usage.total_tokens = usage.prompt_tokens + usage.completion_tokens
+
     const bodyTemplate = {
       "id": `chatcmpl-${generateUUID()}`,
       "object": "chat.completion",
@@ -171,16 +279,12 @@ const handleNonStreamResponse = async (res, response, enable_thinking, enable_we
           "index": 0,
           "message": {
             "role": "assistant",
-            "content": response.choices[0].message.content
+            "content": content
           },
           "finish_reason": "stop"
         }
       ],
-      "usage": {
-        "prompt_tokens": 512,
-        "completion_tokens": response.choices[0].message.content.length,
-        "total_tokens": 512 + response.choices[0].message.content.length
-      }
+      "usage": usage
     }
     res.json(bodyTemplate)
   } catch (error) {
@@ -222,10 +326,10 @@ const handleChatCompletion = async (req, res) => {
 
     if (stream) {
       setResHeader(true)
-      await handleStreamResponse(res, response_data.response, enable_thinking, enable_web_search)
+      await handleStreamResponse(res, response_data.response, enable_thinking, enable_web_search, req.body)
     } else {
       setResHeader(false)
-      await handleNonStreamResponse(res, response_data.response, enable_thinking, enable_web_search, model)
+      await handleNonStreamResponse(res, response_data.response, enable_thinking, enable_web_search, model, req.body)
     }
 
   } catch (error) {
