@@ -15,7 +15,8 @@ const REQUEST_CONFIG = {
   baseDelay: 1000,         // 基础延迟时间(ms)
   maxDelay: 10000,         // 最大延迟时间(ms)
   timeout: 30000,          // 请求超时时间(ms)
-  endpoint: 'https://chat.qwen.ai/api/chat/completions'
+  endpoint: 'https://chat.qwen.ai/api/chat/completions',
+  t2iEndpoint: 'https://chat.qwen.ai/api/v2/chats/new'
 }
 
 // 错误状态码映射
@@ -61,7 +62,7 @@ const isRetryableError = (statusCode) => {
  * @param {string} lastUsedEmail - 上次使用的邮箱（用于错误记录）
  * @returns {Promise<Object>} 响应结果
  */
-const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null) => {
+const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null,url = REQUEST_CONFIG.endpoint) => {
   try {
     // 获取可用的令牌
     const currentToken = accountManager.getAccountToken()
@@ -88,8 +89,7 @@ const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null) => {
     }
 
     logger.network(`发送聊天请求 (重试: ${retryCount}/${REQUEST_CONFIG.maxRetries})`, 'REQUEST')
-
-    const response = await axios.post(REQUEST_CONFIG.endpoint, body, requestConfig)
+    const response = await axios.post(url, body, requestConfig)
 
     // 请求成功
     if (response.status === 200) {
@@ -103,6 +103,7 @@ const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null) => {
     return await handleErrorResponse(response, body, retryCount, lastUsedEmail)
 
   } catch (error) {
+    console.log(error)
     return await handleRequestError(error, body, retryCount, lastUsedEmail)
   }
 }
@@ -248,6 +249,7 @@ const getRequestStats = () => {
 }
 
 module.exports = {
+  REQUEST_CONFIG,
   sendChatRequest,
   getRequestStats
 }

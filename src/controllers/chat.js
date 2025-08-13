@@ -1,6 +1,6 @@
 const { isJson, generateUUID } = require('../utils/tools.js')
 const { createUsageObject } = require('../utils/precise-tokenizer.js')
-const { sendChatRequest } = require('../utils/request.js')
+const { sendChatRequest,REQUEST_CONFIG } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
 const { logger } = require('../utils/logger')
@@ -301,8 +301,119 @@ const handleNonStreamResponse = async (res, response, enable_thinking, enable_we
  * @param {object} req - Express 请求对象
  * @param {object} res - Express 响应对象
  */
+const createNewChatCompletion = async (req, res) => {
+  const { model,chat_type,messages,size} = req.body
+
+  try {
+    const reqBody = {
+        "title":"新建对话",
+        "models":[model],
+        "chat_mode":"normal",
+        "chat_type":"t2i",
+        "timestamp":new Date().getTime()
+    };
+    const response_data = await sendChatRequest(reqBody,1,"",REQUEST_CONFIG.t2iEndpoint)
+
+    if (response_data.status !== 200 || !response_data.response) {
+      res.status(500)
+        .json({
+          error: "请求发送失败！！！"
+        })
+      return
+    }
+
+    _chatId = response_data.response.data.id
+    logger.info(_chatId)
+
+    getImageURL = 'https://chat.qwen.ai/api/v2/chat/completions?chat_id='+_chatId;
+
+    const _userPrompt = messages[messages.length - 1].content
+    let _size = "1:1";//"1024*1024"  
+    if (_userPrompt.indexOf("4:3")!=-1){
+        _size = "4:3";//"1024*768"
+    }else if (_userPrompt.indexOf("3:4")!=-1){
+        _size = "3:4";//"768*1024"
+    }else if (_userPrompt.indexOf("16:9")!=-1){
+        _size = "16:9";//"1280*720"
+    }else if (_userPrompt.indexOf("9:16")!=-1){
+        _size = "9:16";//"720*1280"
+    }
+    if(size != undefined){//如果有传参，以参数的size为主，否则以提示词为的size为主
+       _size = size
+    }
+    console.log(size)
+
+    const imgReqBody = {
+      "chat_id": _chatId,
+      "chat_mode":"normal",
+      "incremental_output":true,
+      "model": model,
+      "messages": messages,
+      "stream": false,
+      "chat_type": chat_type,
+      "id": generateUUID(),
+      "size": _size,
+      "session_id": generateUUID(),
+      "timestamp": new Date().getTime()
+    }
+
+    const img_response_data = await sendChatRequest(imgReqBody,1,"",getImageURL)
+
+    try {
+      resTypeKeyword = "image"
+      // 拆分出每一行
+      const lines = img_response_data.response.trim().split('\n');
+
+      // 找第二个有效的 data 行（非空白行）
+      const dataLines = lines.filter(line => line.startsWith('data: '));
+      const secondData = dataLines[1];
+
+      // 解析 JSON 并提取 content
+      const jsonStr = secondData.slice(6); // 去掉 'data: '
+      const jsonObj = JSON.parse(jsonStr);
+      const contentUrl = jsonObj.choices?.[0]?.delta?.content;
+      res.set({
+              'Content-Type': 'application/json',
+            })
+      res.json({
+        "created": new Date().getTime(),
+        "model": req.body.model,
+        "choices": [
+            {
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "["+resTypeKeyword+"](" + contentUrl + ")"
+                },
+                "finish_reason": "stop"
+            }
+        ]
+      })
+    } catch (error) {
+      console.log(error)
+      res.status(500).json({ error: "服务错误!!!" })
+    }
+
+  } catch (error) {
+    res.status(500)
+      .json({
+        error: "token无效,请求发送失败！！！"
+      })
+  }
+}
+
+
+/**
+ * 主要的聊天完成处理函数
+ * @param {object} req - Express 请求对象
+ * @param {object} res - Express 响应对象
+ */
 const handleChatCompletion = async (req, res) => {
-  const { stream, model } = req.body
+  const { stream, model, chat_type } = req.body
+  if(chat_type=='t2i'){
+    await createNewChatCompletion(req, res)
+    return;
+  }
   const enable_thinking = req.enable_thinking
   const enable_web_search = req.enable_web_search
   let setResHeaderStatus = false

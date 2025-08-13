@@ -15,6 +15,7 @@ const handleGetModels = async (req, res) => {
     }
     const isThinking = ModelsMap[model].abilities.thinking
     const isSearch = ModelsMap[model].chat_type.includes('search')
+    const isT2i = ModelsMap[model].chat_type.includes('t2i')
 
     models.push(modelData)
 
@@ -36,6 +37,13 @@ const handleGetModels = async (req, res) => {
       const newModelData = JSON.parse(JSON.stringify(modelData))
       newModelData.id = `${modelData.id}-thinking-search`
       newModelData.name = `${modelData.name}-thinking-search`
+      models.push(newModelData)
+    }
+
+    if (isT2i) {
+      const newModelData = JSON.parse(JSON.stringify(modelData))
+      newModelData.id = `${modelData.id}-t2i`
+      newModelData.name = `${modelData.name}-t2i`
       models.push(newModelData)
     }
 

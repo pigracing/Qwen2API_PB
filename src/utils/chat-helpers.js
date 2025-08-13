@@ -14,7 +14,9 @@ const isChatType = (model, search) => {
   if (!model) return 't2t'
   if (model.includes('-search') || search) {
     return 'search'
-  } else {
+  } else if(model.includes('-t2i')){
+    return 't2i'
+  }else {
     return 't2t'
   }
 }
@@ -58,6 +60,7 @@ const parserModel = (model) => {
     model = String(model)
     model = model.replace('-search', '')
     model = model.replace('-thinking', '')
+    model = model.replace('-t2i', '')
     return model
   } catch (e) {
     return 'qwen3-coder-plus'
