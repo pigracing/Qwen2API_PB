@@ -349,7 +349,7 @@ const createNewChatCompletion = async (req, res) => {
       "incremental_output":true,
       "model": model,
       "messages": messages,
-      "stream": false,
+      "stream": true,
       "chat_type": chat_type,
       "id": generateUUID(),
       "size": _size,
@@ -357,7 +357,7 @@ const createNewChatCompletion = async (req, res) => {
       "timestamp": new Date().getTime()
     }
 
-    const img_response_data = await sendChatRequest(imgReqBody,1,"",getImageURL)
+    const img_response_data = await sendChatRequest(imgReqBody,1,"",getImageURL,"json")
 
     try {
       resTypeKeyword = "image"
