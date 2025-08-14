@@ -90,6 +90,7 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
       for (const item of chunks) {
         try {
           let dataContent = item.replace("data: ", '')
+          console.log(dataContent)
           let decodeJson = isJson(dataContent) ? JSON.parse(dataContent) : null
           if (decodeJson === null || !decodeJson.choices || decodeJson.choices.length === 0) {
             continue
