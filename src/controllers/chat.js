@@ -1,6 +1,6 @@
 const { isJson, generateUUID } = require('../utils/tools.js')
 const { createUsageObject } = require('../utils/precise-tokenizer.js')
-const { sendChatRequest,REQUEST_CONFIG } = require('../utils/request.js')
+const { sendChatRequest,sendT2IRequest,REQUEST_CONFIG } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
 const { logger } = require('../utils/logger')
@@ -25,6 +25,161 @@ const setResponseHeaders = (res, stream) => {
     }
   } catch (e) {
     logger.error('处理聊天请求时发生错误', 'CHAT', '', e)
+  }
+}
+
+/**
+ * 处理流式响应
+ * @param {object} res - Express 响应对象
+ * @param {object} response - 上游响应流
+ * @param {boolean} enable_thinking - 是否启用思考模式
+ * @param {boolean} enable_web_search - 是否启用网络搜索
+ * @param {object} requestBody - 原始请求体，用于提取prompt信息
+ */
+const handleT2IStreamResponse = async (res, response, enable_thinking, enable_web_search, requestBody = null) => {
+  try {
+    const message_id = generateUUID()
+    const decoder = new TextDecoder('utf-8')
+    let buffer = ''
+
+    // Token消耗量统计
+    let totalTokens = {
+      prompt_tokens: 0,
+      completion_tokens: 0,
+      total_tokens: 0
+    }
+    let completionContent = '' // 收集完整的回复内容用于token估算
+
+    // 提取prompt文本用于token估算
+    let promptText = ''
+    if (requestBody && requestBody.messages) {
+      promptText = requestBody.messages.map(msg => {
+        if (typeof msg.content === 'string') {
+          return msg.content
+        } else if (Array.isArray(msg.content)) {
+          return msg.content.map(item => item.text || '').join('')
+        }
+        return ''
+      }).join('\n')
+    }
+
+    response.on('data', async (chunk) => {
+      const decodeText = decoder.decode(chunk, { stream: true })
+      buffer += decodeText
+
+      const chunks = []
+      let startIndex = 0
+
+      while (true) {
+        const dataStart = buffer.indexOf('data: ', startIndex)
+        if (dataStart === -1) break
+
+        const dataEnd = buffer.indexOf('\n\n', dataStart)
+        if (dataEnd === -1) break
+
+        const dataChunk = buffer.substring(dataStart, dataEnd).trim()
+        chunks.push(dataChunk)
+
+        startIndex = dataEnd + 2
+      }
+
+      if (startIndex > 0) {
+        buffer = buffer.substring(startIndex)
+      }
+
+      for (const item of chunks) {
+        try {
+          let dataContent = item.replace("data: ", '')
+          let decodeJson = isJson(dataContent) ? JSON.parse(dataContent) : null
+          if (decodeJson === null || !decodeJson.choices || decodeJson.choices.length === 0) {
+            continue
+          }
+
+          // 提取真实的usage信息（如果上游API提供）
+          if (decodeJson.usage) {
+            totalTokens = {
+              prompt_tokens: decodeJson.usage.prompt_tokens || totalTokens.prompt_tokens,
+              completion_tokens: decodeJson.usage.completion_tokens || totalTokens.completion_tokens,
+              total_tokens: decodeJson.usage.total_tokens || totalTokens.total_tokens
+            }
+          }
+
+          let content = decodeJson.choices[0].delta.content
+          completionContent += content // 累计完整内容用于token估算
+
+          const StreamTemplate = {
+            "id": `chatcmpl-${message_id}`,
+            "object": "chat.completion.chunk",
+            "created": new Date().getTime(),
+            "choices": [
+              {
+                "index": 0,
+                "delta": {
+                  "content": content
+                },
+                "finish_reason": null
+              }
+            ]
+          }
+
+          res.write(`data: ${JSON.stringify(StreamTemplate)}\n\n`)
+        } catch (error) {
+          logger.error('流式数据处理错误', 'CHAT', '', error)
+          res.status(500).json({ error: "服务错误!!!" })
+        }
+      }
+    })
+
+    response.on('end', async () => {
+      try {
+
+        // 计算最终的token使用量
+        if (totalTokens.prompt_tokens === 0 && totalTokens.completion_tokens === 0) {
+          totalTokens = createUsageObject(requestBody?.messages || promptText, completionContent, null)
+          logger.info(`流式使用tiktoken计算 - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+        } else {
+          logger.info(`流式使用上游真实Token - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+        }
+
+        // 确保token数量的有效性
+        totalTokens.prompt_tokens = Math.max(0, totalTokens.prompt_tokens || 0)
+        totalTokens.completion_tokens = Math.max(0, totalTokens.completion_tokens || 0)
+        totalTokens.total_tokens = totalTokens.prompt_tokens + totalTokens.completion_tokens
+
+        // 发送最终的finish chunk，包含finish_reason
+        res.write(`data: ${JSON.stringify({
+          "id": `chatcmpl-${message_id}`,
+          "object": "chat.completion.chunk",
+          "created": new Date().getTime(),
+          "choices": [
+            {
+              "index": 0,
+              "delta": {},
+              "finish_reason": "stop"
+            }
+          ]
+        })}\n\n`)
+
+        // 发送usage信息chunk（符合OpenAI API标准）
+        res.write(`data: ${JSON.stringify({
+          "id": `chatcmpl-${message_id}`,
+          "object": "chat.completion.chunk",
+          "created": new Date().getTime(),
+          "choices": [],
+          "usage": totalTokens
+        })}\n\n`)
+
+        // 发送结束标记
+        res.write(`data: [DONE]\n\n`)
+        res.end()
+      } catch (e) {
+        logger.error('流式响应处理错误', 'CHAT', '', e)
+        res.status(500).json({ error: "服务错误!!!" })
+      }
+    })
+  } catch (error) {
+    logger.error('聊天处理错误', 'CHAT', '', error)
+    res.status(500).json({ error: "服务错误!!!" })
   }
 }
 
@@ -357,44 +512,12 @@ const createNewChatCompletion = async (req, res) => {
       "timestamp": new Date().getTime()
     }
 
-    const img_response_data = await sendChatRequest(imgReqBody,1,"",getImageURL,"json")
+    const img_response_data = await sendT2IRequest(imgReqBody,1,"",getImageURL)
 
-    try {
-      resTypeKeyword = "image"
-      // 拆分出每一行
-      const lines = img_response_data.response.trim().split('\n');
-
-      // 找第二个有效的 data 行（非空白行）
-      const dataLines = lines.filter(line => line.startsWith('data: '));
-      const secondData = dataLines[1];
-
-      // 解析 JSON 并提取 content
-      const jsonStr = secondData.slice(6); // 去掉 'data: '
-      const jsonObj = JSON.parse(jsonStr);
-      const contentUrl = jsonObj.choices?.[0]?.delta?.content;
-      res.set({
-              'Content-Type': 'application/json',
-            })
-      res.json({
-        "created": new Date().getTime(),
-        "model": req.body.model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": "["+resTypeKeyword+"](" + contentUrl + ")"
-                },
-                "finish_reason": "stop"
-            }
-        ]
-      })
-    } catch (error) {
-      console.log(error)
-      res.status(500).json({ error: "服务错误!!!" })
-    }
-
+    await handleT2IStreamResponse(res, img_response_data.response, false, false, req.body)
+    
   } catch (error) {
+    console.log(error)
     res.status(500)
       .json({
         error: "token无效,请求发送失败！！！"

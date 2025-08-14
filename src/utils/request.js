@@ -109,6 +109,59 @@ const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null,url = 
 }
 
 /**
+ * 发送聊天请求
+ * @param {Object} body - 请求体
+ * @param {number} retryCount - 当前重试次数
+ * @param {string} lastUsedEmail - 上次使用的邮箱（用于错误记录）
+ * @returns {Promise<Object>} 响应结果
+ */
+const sendT2IRequest = async (body, retryCount = 0, lastUsedEmail = null,url = REQUEST_CONFIG.endpoint,responseType) => {
+  try {
+    // 获取可用的令牌
+    const currentToken = accountManager.getAccountToken()
+
+    if (!currentToken) {
+      logger.error('无法获取有效的访问令牌', 'TOKEN')
+      return {
+        status: ERROR_CODES.UNAUTHORIZED,
+        response: { error: '无可用的访问令牌' }
+      }
+    }
+
+    // 构建请求配置
+    const requestConfig = {
+      headers: {
+        'Authorization': `Bearer ${currentToken}`,
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
+      },
+      responseType: responseType ? responseType : body.stream ? 'stream' : 'json',
+      timeout: REQUEST_CONFIG.timeout,
+      validateStatus: (status) => status < 500 // 只有5xx错误才抛出异常
+    }
+
+    logger.network(`发送聊天请求 (重试: ${retryCount}/${REQUEST_CONFIG.maxRetries})`, 'REQUEST')
+    const response = await axios.post(url, body, requestConfig)
+
+    // 请求成功
+    if (response.status === 200) {
+      return {
+        status: 200,
+        response: response.data
+      }
+    }
+
+    // 处理非200状态码
+    return await handleErrorResponse(response, body, retryCount, lastUsedEmail)
+
+  } catch (error) {
+    console.log(error)
+    return await handleRequestError(error, body, retryCount, lastUsedEmail)
+  }
+}
+
+/**
  * 处理HTTP响应错误
  * @param {Object} response - HTTP响应对象
  * @param {Object} body - 原始请求体
@@ -251,5 +304,6 @@ const getRequestStats = () => {
 module.exports = {
   REQUEST_CONFIG,
   sendChatRequest,
+  sendT2IRequest,
   getRequestStats
 }
