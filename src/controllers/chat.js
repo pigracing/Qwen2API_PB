@@ -359,9 +359,6 @@ const createNewChatCompletion = async (req, res) => {
             "timestamp": new Date().getTime()
         }
 
-        console.log("imgReqBody:",imgReqBody)
-        console.log("getImageURL:",getImageURL)
-
         const img_response_data = await sendChatRequest(imgReqBody, 1, "", getImageURL)
 
         try {

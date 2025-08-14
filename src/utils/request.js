@@ -62,7 +62,7 @@ const isRetryableError = (statusCode) => {
  * @param {string} lastUsedEmail - 上次使用的邮箱（用于错误记录）
  * @returns {Promise<Object>} 响应结果
  */
-const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null,url = REQUEST_CONFIG.endpoint) => {
+const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null,url = REQUEST_CONFIG.endpoint,responseType) => {
   try {
     // 获取可用的令牌
     const currentToken = accountManager.getAccountToken()
@@ -83,7 +83,7 @@ const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null,url = 
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
       },
-      responseType: body.stream ? 'stream' : 'json',
+      responseType: responseType ? responseType : body.stream ? 'stream' : 'json',
       timeout: REQUEST_CONFIG.timeout,
       validateStatus: (status) => status < 500 // 只有5xx错误才抛出异常
     }
