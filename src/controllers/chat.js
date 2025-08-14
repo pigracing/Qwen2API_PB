@@ -78,6 +78,7 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
         if (dataEnd === -1) break
 
         const dataChunk = buffer.substring(dataStart, dataEnd).trim()
+        console.log(dataChunk)
         chunks.push(dataChunk)
 
         startIndex = dataEnd + 2
@@ -86,6 +87,8 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
       if (startIndex > 0) {
         buffer = buffer.substring(startIndex)
       }
+
+      console.log(chunks.length)
 
       for (const item of chunks) {
         try {
