@@ -104,11 +104,6 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
             }
           }
 
-          if (!decodeJson.choices[0].delta || !decodeJson.choices[0].delta.content ||
-              (decodeJson.choices[0].delta.phase !== 'image_gen')) {
-            continue
-          }
-
           let content = decodeJson.choices[0].delta.content
           completionContent += content // 累计完整内容用于token估算
 
@@ -128,6 +123,55 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
           }
 
           res.write(`data: ${JSON.stringify(StreamTemplate)}\n\n`)
+          console.log(decodeJson.choices[0].delta.status)
+          if(decodeJson.choices[0].delta.status == 'finished'){
+              try {
+                // 计算最终的token使用量
+                if (totalTokens.prompt_tokens === 0 && totalTokens.completion_tokens === 0) {
+                  totalTokens = createUsageObject(requestBody?.messages || promptText, completionContent, null)
+                  logger.info(`流式使用tiktoken计算 - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+                } else {
+                  logger.info(`流式使用上游真实Token - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
+                }
+
+                // 确保token数量的有效性
+                totalTokens.prompt_tokens = Math.max(0, totalTokens.prompt_tokens || 0)
+                totalTokens.completion_tokens = Math.max(0, totalTokens.completion_tokens || 0)
+                totalTokens.total_tokens = totalTokens.prompt_tokens + totalTokens.completion_tokens
+
+                // 发送最终的finish chunk，包含finish_reason
+                res.write(`data: ${JSON.stringify({
+                  "id": `chatcmpl-${message_id}`,
+                  "object": "chat.completion.chunk",
+                  "created": new Date().getTime(),
+                  "choices": [
+                    {
+                      "index": 0,
+                      "delta": {},
+                      "finish_reason": "stop"
+                    }
+                  ]
+                })}\n\n`)
+
+                // 发送usage信息chunk（符合OpenAI API标准）
+                res.write(`data: ${JSON.stringify({
+                  "id": `chatcmpl-${message_id}`,
+                  "object": "chat.completion.chunk",
+                  "created": new Date().getTime(),
+                  "choices": [],
+                  "usage": totalTokens
+                })}\n\n`)
+
+                // 发送结束标记
+                res.write(`data: [DONE]\n\n`)
+                res.end()
+              } catch (e) {
+                logger.error('流式响应处理错误', 'CHAT', '', e)
+                res.status(500).json({ error: "服务错误!!!" })
+              }
+          }else{
+            continue
+          }
         } catch (error) {
           logger.error('流式数据处理错误', 'CHAT', '', error)
           res.status(500).json({ error: "服务错误!!!" })
@@ -136,51 +180,7 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
     })
 
     response.on('end', async () => {
-      try {
-
-        // 计算最终的token使用量
-        if (totalTokens.prompt_tokens === 0 && totalTokens.completion_tokens === 0) {
-          totalTokens = createUsageObject(requestBody?.messages || promptText, completionContent, null)
-          logger.info(`流式使用tiktoken计算 - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
-        } else {
-          logger.info(`流式使用上游真实Token - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
-        }
-
-        // 确保token数量的有效性
-        totalTokens.prompt_tokens = Math.max(0, totalTokens.prompt_tokens || 0)
-        totalTokens.completion_tokens = Math.max(0, totalTokens.completion_tokens || 0)
-        totalTokens.total_tokens = totalTokens.prompt_tokens + totalTokens.completion_tokens
-
-        // 发送最终的finish chunk，包含finish_reason
-        res.write(`data: ${JSON.stringify({
-          "id": `chatcmpl-${message_id}`,
-          "object": "chat.completion.chunk",
-          "created": new Date().getTime(),
-          "choices": [
-            {
-              "index": 0,
-              "delta": {},
-              "finish_reason": "stop"
-            }
-          ]
-        })}\n\n`)
-
-        // 发送usage信息chunk（符合OpenAI API标准）
-        res.write(`data: ${JSON.stringify({
-          "id": `chatcmpl-${message_id}`,
-          "object": "chat.completion.chunk",
-          "created": new Date().getTime(),
-          "choices": [],
-          "usage": totalTokens
-        })}\n\n`)
-
-        // 发送结束标记
-        res.write(`data: [DONE]\n\n`)
-        res.end()
-      } catch (e) {
-        logger.error('流式响应处理错误', 'CHAT', '', e)
-        res.status(500).json({ error: "服务错误!!!" })
-      }
+      
     })
   } catch (error) {
     logger.error('聊天处理错误', 'CHAT', '', error)
