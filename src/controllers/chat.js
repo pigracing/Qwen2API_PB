@@ -74,7 +74,7 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
       while (true) {
         const dataStart = buffer.indexOf('data: ', startIndex)
         console.log("dataStart"+dataStart)
-        //if (dataStart === -1) break
+        if (dataStart === -1) break
         
         const dataEnd = buffer.indexOf('\n\n', dataStart)
         console.log("dataEnd"+dataEnd)
@@ -494,6 +494,14 @@ const createNewChatCompletion = async (req, res) => {
 
     getImageURL = 'https://chat.qwen.ai/api/v2/chat/completions?chat_id='+_chatId;
 
+    messages[messages.length - 1].chat_type = "t2i"
+    messages[messages.length - 1].extra = {"meta":{"subChatType":"t2i"}}
+    messages[messages.length - 1].user_action = "chat"
+    messages[messages.length - 1].sub_chat_type = "t2i"
+    messages[messages.length - 1].fid = generateUUID()
+    messages[messages.length - 1].feature_config = {"thinking_enabled": false,"output_schema": "phase"}
+    messages[messages.length - 1].models = [model]
+
     const _userPrompt = messages[messages.length - 1].content
     let _size = "1:1";//"1024*1024"  
     if (_userPrompt.indexOf("4:3")!=-1){
@@ -517,12 +525,12 @@ const createNewChatCompletion = async (req, res) => {
       "model": model,
       "messages": messages,
       "stream": true,
-      "chat_type": chat_type,
-      "id": generateUUID(),
       "size": _size,
-      "session_id": generateUUID(),
+      "parent_id": null,
       "timestamp": new Date().getTime()
     }
+
+    console.log(imgReqBody)
 
     const img_response_data = await sendT2IRequest(imgReqBody,1,"",getImageURL)
 
