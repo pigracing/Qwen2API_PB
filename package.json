@@ -1,16 +1,10 @@
 {
   "name": "qwen2api",
-  "version": "2025.07.26.10.40",
+  "version": "2025.08.14.18.20",
   "main": "src/server.js",
-  "bin": "src/server.js",
   "scripts": {
     "start": "node src/start.js",
     "dev": "nodemon src/server.js",
-    "build": "pkg . --out-path dist",
-    "build:win": "pkg . --targets node18-win-x64 --out-path pkg_dist",
-    "build:linux": "pkg . --targets node18-linux-x64 --out-path pkg_dist",
-    "build:mac": "pkg . --targets node18-macos-x64 --out-path pkg_dist",
-    "build:all": "pkg . --targets node18-win-x64,node18-linux-x64,node18-macos-x64 --out-path pkg_dist",
     "pm2": "pm2 start ecosystem.config.js",
     "pm2:stop": "pm2 stop qwen2api",
     "pm2:restart": "pm2 restart qwen2api",
@@ -41,15 +35,5 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
-  },
-  "pkg": {
-    "scripts": [
-      "src/**/*.js"
-    ],
-    "assets": [],
-    "targets": [
-      "node18-win-x64"
-    ],
-    "outputPath": "pkg_dist"
   }
 }

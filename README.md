@@ -138,36 +138,6 @@ npm run dev
 - 当 `PM2_INSTANCES>1` 时，使用 Node.js 集群模式
 - 自动限制进程数不超过 CPU 核心数
 
-
-### 📦 二进制文件部署
-
-使用 pkg 打包的二进制文件，无需安装 Node.js 环境即可运行：
-
-#### 下载预编译二进制文件
-
-从 [GitHub Releases](https://github.com/Rfym21/Qwen2API/releases) 下载对应平台的二进制文件：
-
-- **Windows**: `qwen2api-win.exe`
-- **Linux**: `qwen2api-linux`
-- **macOS**: `qwen2api-macos`
-
-#### 使用方法
-
-1. 下载对应平台的二进制文件
-2. 在同目录下创建 `.env` 配置文件
-3. 直接运行二进制文件
-
-```bash
-# Windows
-./qwen2api-win.exe
-
-# Linux/macOS
-chmod +x qwen2api-linux  # 或 qwen2api-macos
-./qwen2api-linux         # 或 ./qwen2api-macos
-```
-
-> 💡 **注意**: 二进制文件会自动读取同目录下的 `.env` 配置文件，请确保配置文件存在且格式正确。
-
 ### ☁️ Hugging Face 部署
 
 快速部署到 Hugging Face Spaces：
@@ -379,4 +349,84 @@ API 自动处理图像上传，支持在对话中发送图片：
     }
   ]
 }
+```
+
+### 🖥️ CLI 端点
+
+CLI 端点支持使用 `qwen3-coder-plus` 256K上下文, tools_use
+
+#### 💬 CLI 聊天对话
+
+通过 CLI 端点发送聊天请求，支持流式和非流式响应。
+
+```http
+POST /cli/v1/chat/completions
+Content-Type: application/json
+Authorization: Bearer API_KEY
+```
+
+**请求体:**
+```json
+{
+  "model": "qwen-max-latest",
+  "messages": [
+    {
+      "role": "user",
+      "content": "你好，请介绍一下自己。"
+    }
+  ],
+  "stream": false,
+  "temperature": 0.7,
+  "max_tokens": 2000
+}
+```
+
+**流式请求:**
+```json
+{
+  "model": "qwen-max-latest",
+  "messages": [
+    {
+      "role": "user",
+      "content": "写一首关于春天的诗。"
+    }
+  ],
+  "stream": true
+}
+```
+
+**响应格式:**
+
+非流式响应与标准 OpenAI API 格式相同：
+```json
+{
+  "id": "chatcmpl-123",
+  "object": "chat.completion",
+  "created": 1677652288,
+  "model": "qwen-max-latest",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "你好！我是一个AI助手..."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 50,
+    "total_tokens": 70
+  }
+}
+```
+
+流式响应使用 Server-Sent Events (SSE) 格式：
+```
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"qwen-max-latest","choices":[{"index":0,"delta":{"content":"你好"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"qwen-max-latest","choices":[{"index":0,"delta":{"content":"！"},"finish_reason":null}]}
+
+data: [DONE]
 ```

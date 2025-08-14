@@ -91,6 +91,9 @@ const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null,url = 
     logger.network(`发送聊天请求 (重试: ${retryCount}/${REQUEST_CONFIG.maxRetries})`, 'REQUEST')
     const response = await axios.post(url, body, requestConfig)
 
+    // console.log("body:",body)
+    
+
     // 请求成功
     if (response.status === 200) {
       return {
@@ -99,11 +102,12 @@ const sendChatRequest = async (body, retryCount = 0, lastUsedEmail = null,url = 
       }
     }
 
+
     // 处理非200状态码
     return await handleErrorResponse(response, body, retryCount, lastUsedEmail)
 
   } catch (error) {
-    console.log(error)
+    console.log("error:"+error)
     return await handleRequestError(error, body, retryCount, lastUsedEmail)
   }
 }
