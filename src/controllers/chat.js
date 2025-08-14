@@ -104,6 +104,11 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
             }
           }
 
+          if (!decodeJson.choices[0].delta || !decodeJson.choices[0].delta.content ||
+              (decodeJson.choices[0].delta.phase !== 'image_gen')) {
+            continue
+          }
+
           let content = decodeJson.choices[0].delta.content
           completionContent += content // 累计完整内容用于token估算
 
