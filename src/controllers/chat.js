@@ -65,6 +65,7 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
 
     response.on('data', async (chunk) => {
       const decodeText = decoder.decode(chunk, { stream: true })
+      console.log(decodeText)
       buffer += decodeText
 
       const chunks = []
