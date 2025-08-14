@@ -73,7 +73,7 @@ const handleT2IStreamResponse = async (res, response, enable_thinking, enable_we
       while (true) {
         const dataStart = buffer.indexOf('data: ', startIndex)
         console.log("dataStart"+dataStart)
-        if (dataStart === -1) break
+        //if (dataStart === -1) break
         
         const dataEnd = buffer.indexOf('\n\n', dataStart)
         console.log("dataEnd"+dataEnd)
