@@ -82,7 +82,7 @@ jobs:
       id: tags
       run: |
         # 使用package.json的name（清理后）作为镜像名
-        DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/${{ steps.package-info.outputs.clean_name }}"
+        DOCKERHUB_REPO="${{ secrets.DOCKERHUB_USERNAME }}/qwen2apiD"
         
         if [ "${{ github.event_name }}" = "pull_request" ]; then
           # PR: 只生成PR标签用于测试
