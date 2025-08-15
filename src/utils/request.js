@@ -241,19 +241,9 @@ const handleRateLimitError = async (body, retryCount) => {
   return sendChatRequest(body, retryCount + 1)
 }
 
-/**
- * 获取请求统计信息
- * @returns {Object} 统计信息
- */
-const getRequestStats = () => {
-  return {
-    config: REQUEST_CONFIG,
-    accountHealth: accountManager.getHealthStats()
-  }
-}
+
 
 module.exports = {
   REQUEST_CONFIG,
-  sendChatRequest,
-  getRequestStats
+  sendChatRequest
 }

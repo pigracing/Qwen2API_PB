@@ -35,18 +35,7 @@ const validateFileSize = (fileSize) => {
   return fileSize > 0 && fileSize <= UPLOAD_CONFIG.maxFileSize
 }
 
-/**
- * 验证文件类型
- * @param {string} mimeType - MIME类型
- * @returns {boolean} 是否为支持的文件类型
- */
-const validateFileType = (mimeType) => {
-  if (!mimeType) return false
 
-  return Object.values(SUPPORTED_TYPES).some(types =>
-    types.includes(mimeType.toLowerCase())
-  )
-}
 
 /**
  * 从完整MIME类型获取简化的文件类型
@@ -290,21 +279,8 @@ const uploadFileToQwenOss = async (fileBuffer, originalFilename, authToken) => {
   }
 }
 
-/**
- * 获取上传配置信息
- * @returns {Object} 配置信息
- */
-const getUploadConfig = () => {
-  return {
-    ...UPLOAD_CONFIG,
-    supportedTypes: SUPPORTED_TYPES
-  }
-}
+
 
 module.exports = {
-  uploadFileToQwenOss,
-  getUploadConfig,
-  validateFileSize,
-  validateFileType,
-  getSimpleFileType
+  uploadFileToQwenOss
 }
