@@ -391,15 +391,6 @@ class Account {
     }
 
     /**
-     * 设置默认模型列表（已废弃，模型列表由 models-map.js 管理）
-     * @param {Array<string>} models - 模型列表
-     * @deprecated 模型列表现在由 models-map.js 统一管理
-     */
-    async setDefaultModels(models) {
-        logger.warn('setDefaultModels 方法已废弃，模型列表由 models-map.js 统一管理', 'ACCOUNT')
-    }
-
-    /**
      * 获取基础模型列表
      * @returns {Promise<Array<string>>} 基础模型列表
      */

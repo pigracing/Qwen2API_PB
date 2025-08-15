@@ -4,6 +4,7 @@ const config = require('../config/index.js')
 const { apiKeyVerify } = require('../middlewares/authorization.js')
 const { handleCliChatCompletion } = require('../controllers/cli.chat.js')
 const accountManager = require('../utils/account.js')
+const cliManager = require('../utils/cli.manager.js')
 
 router.post(`${config.apiPrefix ? config.apiPrefix : ''}/cli/v1/chat/completions`,
     apiKeyVerify,
