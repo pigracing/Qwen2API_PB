@@ -4,7 +4,6 @@ const TokenManager = require('./token-manager')
 const AccountRotator = require('./account-rotator')
 const { generateApiModelList, getBaseModels } = require('./model-utils')
 const { logger } = require('./logger')
-const cliManager = require('./cli.manager')
 /**
  * 账户管理器
  * 统一管理账户、令牌、模型等功能
@@ -25,6 +24,7 @@ class Account {
 
         // cli请求次数定时刷新器
         this.cliRequestNumberInterval = null
+        this.cliDailyResetInterval = null
 
         // 初始化
         this._initialize()
@@ -73,46 +73,16 @@ class Account {
             // 更新账户轮询器
             this.accountRotator.setAccounts(this.accountTokens)
 
-            // 初始化 CLI 账户,默认初始化第一个账号
-            logger.info(`初始化 CLI 账户, 默认初始化第一个账号: ${this.accountTokens[0].email}`, 'ACCOUNT')
+            // 初始化 CLI 账户,随机初始化一个账号
             if (this.accountTokens.length > 0) {
-                const cliAccount = await cliManager.initCliAccount(this.accountTokens[0].token)
-                if (cliAccount.access_token && cliAccount.refresh_token && cliAccount.expiry_date) {
-                    this.accountTokens[0].cli_info = {
-                        access_token: cliAccount.access_token,
-                        refresh_token: cliAccount.refresh_token,
-                        expiry_date: cliAccount.expiry_date,
-                        refresh_token_interval: setInterval(async () => {
-                            const refreshToken = await cliManager.refreshAccessToken({
-                                access_token: this.accountTokens[0].cli_info.access_token,
-                                refresh_token: this.accountTokens[0].cli_info.refresh_token,
-                                expiry_date: this.accountTokens[0].cli_info.expiry_date
-                            })
-                            if (refreshToken.access_token && refreshToken.refresh_token && refreshToken.expiry_date) {
-                                this.accountTokens[0].cli_info.access_token = refreshToken.access_token
-                                this.accountTokens[0].cli_info.refresh_token = refreshToken.refresh_token
-                                this.accountTokens[0].cli_info.expiry_date = refreshToken.expiry_date
-                            }
-                            // 每24小时刷新一次
-                        }, 1000 * 60 * 60 * 24),
-                        request_number: 0
-                    }
-                }
+                const randomIndex = Math.floor(Math.random() * this.accountTokens.length)
+                const randomAccount = this.accountTokens[randomIndex]
+                logger.info(`初始化 CLI 账户, 随机初始化账号: ${randomAccount.email}`, 'ACCOUNT')
+                await this._initializeCliAccount(randomAccount)
             }
 
-            // 设置cli定时器 每天00:00:00刷新一次
-            logger.info(`设置cli定时器 每天00:00:00刷新一次`, 'ACCOUNT')
-            //计算当前时间距离00:00:00的毫秒数
-            const now = new Date()
-            const target = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
-            const timeDiff = target.getTime() - now.getTime()
-            this.cliRequestNumberInterval = setTimeout(() => {
-                this.cliRequestNumberInterval = setInterval(() => {
-                    this.accountTokens.filter(account => account.cli_info).forEach(account => {
-                        account.cli_info.request_number = 0
-                    })
-                }, 24 * 60 * 60 * 1000)
-            }, timeDiff)
+            // 设置cli定时器 每天00:00:00刷新请求次数
+            this._setupDailyResetTimer()
 
             logger.success(`成功加载 ${this.accountTokens.length} 个账户`, 'ACCOUNT')
         } catch (error) {
@@ -141,6 +111,88 @@ class Account {
         })
 
         this.accountTokens = await Promise.all(loginPromises)
+    }
+
+    /**
+     * 初始化CLI账户
+     * @param {Object} account - 账户对象
+     * @private
+     */
+    async _initializeCliAccount(account) {
+        try {
+            const cliManager = require('./cli.manager')
+            const cliAccount = await cliManager.initCliAccount(account.token)
+
+            if (cliAccount.access_token && cliAccount.refresh_token && cliAccount.expiry_date) {
+                account.cli_info = {
+                    access_token: cliAccount.access_token,
+                    refresh_token: cliAccount.refresh_token,
+                    expiry_date: cliAccount.expiry_date,
+                    refresh_token_interval: setInterval(async () => {
+                        try {
+                            const refreshToken = await cliManager.refreshAccessToken({
+                                access_token: account.cli_info.access_token,
+                                refresh_token: account.cli_info.refresh_token,
+                                expiry_date: account.cli_info.expiry_date
+                            })
+                            if (refreshToken.access_token && refreshToken.refresh_token && refreshToken.expiry_date) {
+                                account.cli_info.access_token = refreshToken.access_token
+                                account.cli_info.refresh_token = refreshToken.refresh_token
+                                account.cli_info.expiry_date = refreshToken.expiry_date
+                                logger.info(`CLI账户 ${account.email} 令牌刷新成功`, 'CLI')
+                            }
+                        } catch (error) {
+                            logger.error(`CLI账户 ${account.email} 令牌刷新失败`, 'CLI', '', error)
+                        }
+                        // 每2小时刷新一次
+                    }, 1000 * 60 * 60 * 2),
+                    request_number: 0
+                }
+                logger.success(`CLI账户 ${account.email} 初始化成功`, 'CLI')
+            } else {
+                logger.error(`CLI账户 ${account.email} 初始化失败：无效的响应数据`, 'CLI')
+            }
+        } catch (error) {
+            logger.error(`CLI账户 ${account.email} 初始化失败`, 'CLI', '', error)
+        }
+    }
+
+    /**
+     * 设置每日重置定时器
+     * @private
+     */
+    _setupDailyResetTimer() {
+        logger.info('设置CLI请求次数每日重置定时器', 'CLI')
+
+        // 计算到下一天00:00:00的毫秒数
+        const now = new Date()
+        const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0)
+        const timeDiff = tomorrow.getTime() - now.getTime()
+
+        logger.info(`距离下次重置还有 ${Math.round(timeDiff / 1000 / 60)} 分钟`, 'CLI')
+
+        // 首次执行使用setTimeout
+        this.cliRequestNumberInterval = setTimeout(() => {
+            // 重置所有CLI账户的请求次数
+            this._resetCliRequestNumbers()
+
+            // 设置每24小时执行一次的定时器
+            this.cliDailyResetInterval = setInterval(() => {
+                this._resetCliRequestNumbers()
+            }, 24 * 60 * 60 * 1000)
+        }, timeDiff)
+    }
+
+    /**
+     * 重置CLI请求次数
+     * @private
+     */
+    _resetCliRequestNumbers() {
+        const cliAccounts = this.accountTokens.filter(account => account.cli_info)
+        cliAccounts.forEach(account => {
+            account.cli_info.request_number = 0
+        })
+        logger.info(`已重置 ${cliAccounts.length} 个CLI账户的请求次数`, 'CLI')
     }
 
     /**
@@ -542,6 +594,26 @@ class Account {
     }
 
     /**
+     * 为指定账户初始化CLI信息（公共方法）
+     * @param {Object} account - 账户对象
+     * @returns {Promise<boolean>} 初始化是否成功
+     */
+    async initializeCliForAccount(account) {
+        if (!account) {
+            logger.error('账户对象不能为空', 'CLI')
+            return false
+        }
+
+        try {
+            await this._initializeCliAccount(account)
+            return true
+        } catch (error) {
+            logger.error(`为账户 ${account.email} 初始化CLI失败`, 'CLI', '', error)
+            return false
+        }
+    }
+
+    /**
      * 延迟函数
      * @param {number} ms - 延迟毫秒数
      * @private
@@ -554,10 +626,30 @@ class Account {
      * 清理资源
      */
     destroy() {
+        // 清理自动刷新定时器
         if (this.refreshInterval) {
             clearInterval(this.refreshInterval)
             this.refreshInterval = null
         }
+
+        // 清理CLI请求次数重置定时器
+        if (this.cliRequestNumberInterval) {
+            clearTimeout(this.cliRequestNumberInterval)
+            this.cliRequestNumberInterval = null
+        }
+
+        if (this.cliDailyResetInterval) {
+            clearInterval(this.cliDailyResetInterval)
+            this.cliDailyResetInterval = null
+        }
+
+        // 清理所有CLI账户的刷新定时器
+        this.accountTokens.forEach(account => {
+            if (account.cli_info && account.cli_info.refresh_token_interval) {
+                clearInterval(account.cli_info.refresh_token_interval)
+                account.cli_info.refresh_token_interval = null
+            }
+        })
 
         this.accountRotator.reset()
         logger.info('账户管理器已清理资源', 'ACCOUNT', '🧹')
