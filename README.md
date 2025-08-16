@@ -163,7 +163,8 @@ Qwen2API/
 │
 ├── caches/                          # 缓存文件目录
 ├── data/                            # 数据文件目录
-│   └── data.json
+│   ├── data.json
+│   └── data_template.json
 │
 ├── src/                             # 后端源代码目录
 │   ├── server.js                    # 主服务器文件
@@ -172,7 +173,7 @@ Qwen2API/
 │   │   └── index.js                 # 配置文件
 │   ├── controllers/                 # 控制器目录
 │   │   ├── chat.js
-│   │   ├── chat-optimized.js        # 优化版聊天控制器
+│   │   ├── cli.chat.js              # CLI聊天控制器
 │   │   └── models.js
 │   ├── middlewares/                 # 中间件目录
 │   │   ├── authorization.js
@@ -182,6 +183,7 @@ Qwen2API/
 │   ├── routes/                      # 路由目录
 │   │   ├── accounts.js
 │   │   ├── chat.js
+│   │   ├── cli.chat.js              # CLI聊天路由
 │   │   ├── models.js
 │   │   ├── settings.js
 │   │   └── verify.js
@@ -189,10 +191,12 @@ Qwen2API/
 │       ├── account-rotator.js
 │       ├── account.js
 │       ├── chat-helpers.js
+│       ├── cli.manager.js           # CLI管理器
 │       ├── data-persistence.js
 │       ├── img-caches.js
 │       ├── logger.js                # 日志工具
 │       ├── model-utils.js
+│       ├── precise-tokenizer.js     # 精确分词器
 │       ├── redis.js
 │       ├── request.js
 │       ├── setting.js
@@ -201,7 +205,30 @@ Qwen2API/
 │       └── upload.js
 │
 └── public/                          # 前端项目目录
-    └── dist/                        # 编译后的前端文件
+    ├── dist/                        # 编译后的前端文件
+    │   ├── assets/                  # 静态资源
+    │   ├── favicon.png
+    │   └── index.html
+    ├── src/                         # 前端源代码
+    │   ├── App.vue                  # 主应用组件
+    │   ├── main.js                  # 入口文件
+    │   ├── style.css                # 全局样式
+    │   ├── assets/                  # 静态资源
+    │   │   └── background.mp4
+    │   ├── routes/                  # 路由配置
+    │   │   └── index.js
+    │   └── views/                   # 页面组件
+    │       ├── auth.vue             # 认证页面
+    │       ├── dashboard.vue        # 仪表板页面
+    │       └── settings.vue         # 设置页面
+    ├── package.json                 # 前端依赖配置
+    ├── package-lock.json
+    ├── index.html                   # 前端入口HTML
+    ├── postcss.config.js            # PostCSS配置
+    ├── tailwind.config.js           # TailwindCSS配置
+    ├── vite.config.js               # Vite构建配置
+    └── public/                      # 公共静态资源
+        └── favicon.png
 ```
 
 ## 📖 API 文档
