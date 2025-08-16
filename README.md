@@ -353,7 +353,7 @@ API 自动处理图像上传，支持在对话中发送图片：
 
 ### 🖥️ CLI 端点
 
-CLI 端点支持使用 `qwen3-coder-plus` 256K上下文, tools_use
+使用CLI端点仅支持 qwen3-coder-plus 和 qwen3-coder-flash，支持256K上下文和工具调用（Function Calling）
 
 #### 💬 CLI 聊天对话
 
@@ -368,7 +368,7 @@ Authorization: Bearer API_KEY
 **请求体:**
 ```json
 {
-  "model": "qwen-max-latest",
+  "model": "qwen3-coder-plus",
   "messages": [
     {
       "role": "user",
@@ -384,7 +384,7 @@ Authorization: Bearer API_KEY
 **流式请求:**
 ```json
 {
-  "model": "qwen-max-latest",
+  "model": "qwen3-coder-flash",
   "messages": [
     {
       "role": "user",
@@ -403,7 +403,7 @@ Authorization: Bearer API_KEY
   "id": "chatcmpl-123",
   "object": "chat.completion",
   "created": 1677652288,
-  "model": "qwen-max-latest",
+  "model": "qwen3-coder-plus",
   "choices": [
     {
       "index": 0,
@@ -424,9 +424,9 @@ Authorization: Bearer API_KEY
 
 流式响应使用 Server-Sent Events (SSE) 格式：
 ```
-data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"qwen-max-latest","choices":[{"index":0,"delta":{"content":"你好"},"finish_reason":null}]}
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"qwen3-coder-flash","choices":[{"index":0,"delta":{"content":"你好"},"finish_reason":null}]}
 
-data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"qwen-max-latest","choices":[{"index":0,"delta":{"content":"！"},"finish_reason":null}]}
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1677652288,"model":"qwen3-coder-flash","choices":[{"index":0,"delta":{"content":"！"},"finish_reason":null}]}
 
 data: [DONE]
 ```
