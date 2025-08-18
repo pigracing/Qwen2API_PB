@@ -1,6 +1,6 @@
 const { isJson, generateUUID } = require('../utils/tools.js')
 const { createUsageObject } = require('../utils/precise-tokenizer.js')
-const { sendChatRequest, REQUEST_CONFIG } = require('../utils/request.js')
+const { sendChatRequest,sendT2IRequest,REQUEST_CONFIG } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
 const { logger } = require('../utils/logger')
@@ -321,7 +321,7 @@ const createNewChatCompletion = async (req, res) => {
                 })
             return
         }
-
+        _currentToken = response_data.currentToken
         _chatId = response_data.response.data.id
         logger.info("chat_id:" + _chatId)
 
@@ -351,7 +351,7 @@ const createNewChatCompletion = async (req, res) => {
             "incremental_output": true,
             "model": model,
             "messages": messages,
-            "stream": false,
+            "stream": true,
             "chat_type": chat_type,
             "id": generateUUID(),
             "size": _size,
@@ -359,7 +359,7 @@ const createNewChatCompletion = async (req, res) => {
             "timestamp": new Date().getTime()
         }
 
-        const img_response_data = await sendChatRequest(imgReqBody, 1, "", getImageURL)
+        const img_response_data = await sendT2IRequest(imgReqBody,1,"",getImageURL,"json",_currentToken)
 
         try {
             const resTypeKeyword = "image"
