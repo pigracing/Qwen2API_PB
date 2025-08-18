@@ -47,6 +47,9 @@ OUTPUT_THINK=true             # 是否输出思考过程 (true/false)
 # 🗄️ 数据存储
 DATA_SAVE_MODE=none           # 数据保存模式 (none/file/redis)
 REDIS_URL=                    # Redis 连接地址 (可选)
+
+# 📸 缓存配置
+CACHE_MODE=default            # 图片缓存模式 (default/file)
 ```
 
 #### 📋 配置说明
@@ -63,11 +66,34 @@ REDIS_URL=                    # Redis 连接地址 (可选)
 | `OUTPUT_THINK` | 是否显示 AI 思考过程 | `true` 或 `false` |
 | `DATA_SAVE_MODE` | 数据持久化方式 | `none`/`file`/`redis` |
 | `REDIS_URL` | Redis 数据库连接 | `redis://localhost:6379` |
+| `CACHE_MODE` | 图片缓存存储方式 | `default`/`file` |
 | `LOG_LEVEL` | 日志级别 | `DEBUG`/`INFO`/`WARN`/`ERROR` |
 | `ENABLE_FILE_LOG` | 是否启用文件日志 | `true` 或 `false` |
 | `LOG_DIR` | 日志文件目录 | `./logs` |
 | `MAX_LOG_FILE_SIZE` | 最大日志文件大小(MB) | `10` |
 | `MAX_LOG_FILES` | 保留的日志文件数量 | `5` |
+
+#### 📸 CACHE_MODE 缓存模式说明
+
+`CACHE_MODE` 环境变量控制图片缓存的存储方式，用于优化图片上传和处理性能：
+
+| 模式 | 说明 | 适用场景 |
+|------|------|----------|
+| `default` | 内存缓存模式 (默认) | 单进程部署，重启后缓存丢失 |
+| `file` | 文件缓存模式 | 多进程部署，缓存持久化到 `./caches/` 目录 |
+
+**推荐配置:**
+- **单进程部署**: 使用 `CACHE_MODE=default`，性能最佳
+- **多进程/集群部署**: 使用 `CACHE_MODE=file`，确保进程间缓存共享
+- **Docker 部署**: 建议使用 `CACHE_MODE=file` 并挂载 `./caches` 目录
+
+**文件缓存目录结构:**
+```
+caches/
+├── [signature1].txt    # 缓存文件，包含图片URL
+├── [signature2].txt
+└── ...
+```
 
 > 💡 **提示**: 可以在 [Upstash](https://upstash.com/) 免费创建 Redis 实例，使用 TLS 协议时地址格式为 `rediss://...`
 
@@ -88,7 +114,9 @@ docker run -d \
   -p 3000:3000 \
   -e API_KEY=sk-your-secret-key \
   -e DATA_SAVE_MODE=none \
+  -e CACHE_MODE=file \
   -e ACCOUNTS= \
+  -v ./caches:/app/caches \
   --name qwen2api \
   rfym21/qwen2api:latest
 ```
@@ -316,6 +344,54 @@ Authorization: Bearer sk-your-api-key
 }
 ```
 
+### 🎨 T2I 图像生成
+
+使用 `-t2i`模型启用文本到图像生成功能。
+你可以通过在请求体中添加 `size` 参数或在消息内容中包含特定关键词 `1:1`, `4:3`, `3:4`, `16:9`, `9:16` 来控制图片尺寸。
+
+```http
+POST /v1/chat/completions
+Content-Type: application/json
+Authorization: Bearer sk-your-api-key
+```
+
+**请求体:**
+```json
+{
+  "model": "qwen-max-latest-t2i",
+  "messages": [
+    {
+      "role": "user",
+      "content": "画一只在花园里玩耍的小猫咪，卡通风格"
+    }
+  ],
+  "size": "1:1",
+  "stream": false
+}
+```
+
+**支持的参数:**
+- `size`: 图片尺寸，支持 `"1:1"`、`"4:3"`、`"3:4"`、`"16:9"`、`"9:16"`
+- `stream`: 支持流式和非流式响应
+
+**响应示例:**
+```json
+{
+  "created": 1677652288,
+  "model": "qwen-max-latest",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "![image](https://example.com/generated-image.jpg)"
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}
+```
+
 ### 🎯 高级功能
 
 #### 🔍 智能搜索模式
@@ -350,6 +426,28 @@ Authorization: Bearer sk-your-api-key
   "messages": [...]
 }
 ```
+
+#### 🎨 T2I 生图模式
+
+通过设置 `chat_type` 参数为 `t2i` 启用文本到图像生成功能：
+
+```json
+{
+  "model": "qwen-max-latest",
+  "chat_type": "t2i",
+  "messages": [
+    {
+      "role": "user",
+      "content": "画一只可爱的小猫咪"
+    }
+  ],
+  "size": "1:1"
+}
+```
+
+**支持的图片尺寸:** `1:1`、`4:3`、`3:4`、`16:9`、`9:16`
+
+**智能尺寸识别:** 系统会自动从提示词中识别尺寸关键词并设置对应尺寸
 
 #### 🖼️ 多模态支持
 

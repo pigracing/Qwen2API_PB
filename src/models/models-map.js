@@ -111,45 +111,6 @@ const ModelsMap = {
       "fire-crawl"
     ]
   },
-  "qwen3-32b": {
-    "capabilities": {
-      "document": true,
-      "vision": true,
-      "video": true,
-      "audio": true,
-      "citations": true,
-      "thinking_budget": true,
-      "thinking": true
-    },
-    "max_context_length": 131072,
-    "max_thinking_generation_length": 38912,
-    "max_summary_generation_length": 8192,
-    "abilities": {
-      "document": 1,
-      "vision": 1,
-      "video": 1,
-      "audio": 1,
-      "mcp": 1,
-      "citations": 1,
-      "thinking_budget": 1,
-      "thinking": 1
-    },
-    "chat_type": [
-      "t2t",
-      "t2v",
-      "t2i",
-      "search",
-      "artifacts",
-      "web_dev",
-      "deep_research"
-    ],
-    "mcp": [
-      "image-generation",
-      "code-interpreter",
-      "amap",
-      "fire-crawl"
-    ]
-  },
   "qwen-max-latest": {
     "capabilities": {
       "vision": true,

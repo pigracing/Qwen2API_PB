@@ -1,6 +1,6 @@
 const { isJson, generateUUID } = require('../utils/tools.js')
 const { createUsageObject } = require('../utils/precise-tokenizer.js')
-const { sendChatRequest,sendT2IRequest,REQUEST_CONFIG } = require('../utils/request.js')
+const { sendChatRequest, sendT2IRequest, REQUEST_CONFIG } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
 const { logger } = require('../utils/logger')
@@ -323,7 +323,7 @@ const createNewChatCompletion = async (req, res) => {
         }
         _currentToken = response_data.currentToken
         _chatId = response_data.response.data.id
-        logger.info("chat_id:" + _chatId)
+        // logger.info("chat_id:" + _chatId)
 
         const getImageURL = 'https://chat.qwen.ai/api/v2/chat/completions?chat_id=' + _chatId
 
@@ -343,7 +343,7 @@ const createNewChatCompletion = async (req, res) => {
             //如果有传参，以参数的size为主，否则以提示词为的size为主
             _size = size
         }
-        logger.info("size:" + _size)
+        // logger.info("size:" + _size)
 
         const imgReqBody = {
             "chat_id": _chatId,
@@ -359,27 +359,21 @@ const createNewChatCompletion = async (req, res) => {
             "timestamp": new Date().getTime()
         }
 
-        const img_response_data = await sendT2IRequest(imgReqBody,1,"",getImageURL,"json",_currentToken)
+        const img_response_data = await sendT2IRequest(imgReqBody, 1, "", getImageURL, "json", _currentToken)
 
         try {
-            const resTypeKeyword = "image"
-            // 拆分出每一行
 
             // console.log(img_response_data.response)
             const lines = img_response_data.response.trim().split('\n')
-
-            // 找第二个有效的 data 行（非空白行）
-            const dataLines = lines.filter(line => line.startsWith('data: '));
-            const secondData = dataLines[1];
+            const dataLines = lines.filter(line => line.startsWith('data: '))
+            const secondData = dataLines[1]
 
             // 解析 JSON 并提取 content
-            const jsonStr = secondData.slice(6); // 去掉 'data: '
-            const jsonObj = JSON.parse(jsonStr);
-            const contentUrl = jsonObj.choices?.[0]?.delta?.content;
-            res.set({
-                'Content-Type': 'application/json',
-            })
-            res.json({
+            const jsonStr = secondData.slice(6)
+            const jsonObj = JSON.parse(jsonStr)
+            const contentUrl = jsonObj.choices?.[0]?.delta?.content
+
+            const returnBody = {
                 "created": new Date().getTime(),
                 "model": req.body.model,
                 "choices": [
@@ -387,12 +381,23 @@ const createNewChatCompletion = async (req, res) => {
                         "index": 0,
                         "message": {
                             "role": "assistant",
-                            "content": "[" + resTypeKeyword + "](" + contentUrl + ")"
+                            "content": `![image](${contentUrl})`
                         },
                         "finish_reason": "stop"
                     }
                 ]
-            })
+            }
+
+            setResponseHeaders(res, req.body.stream)
+
+            if (req.body.stream) {
+                res.write(`data: ${JSON.stringify(returnBody)}\n\n`)
+                res.write(`data: [DONE]\n\n`)
+                res.end()
+            } else {
+                res.json(returnBody)
+            }
+
         } catch (error) {
             console.log(error)
             res.status(500).json({ error: "服务错误!!!" })
@@ -414,9 +419,10 @@ const createNewChatCompletion = async (req, res) => {
  */
 const handleChatCompletion = async (req, res) => {
     const { stream, model, chat_type } = req.body
+
     if (chat_type == 't2i') {
         await createNewChatCompletion(req, res)
-        return;
+        return
     }
     const enable_thinking = req.enable_thinking
     const enable_web_search = req.enable_web_search
