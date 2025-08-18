@@ -89,7 +89,7 @@ jobs:
           TAGS="${DOCKERHUB_REPO}:pr-${{ github.event.number }}"
         else
           # 总是包含latest标签
-          TAGS="${DOCKERHUB_REPO}-pb:latest"
+          TAGS="${DOCKERHUB_REPO}:latest"
           
           # 如果有package.json，添加v前缀版本标签
           if [ "${{ steps.package-info.outputs.has_package_json }}" = "true" ]; then
