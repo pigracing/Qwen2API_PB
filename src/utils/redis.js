@@ -197,7 +197,16 @@ const getAllAccounts = async () => {
   try {
     const client = await ensureConnection()
 
-    const keys = await client.keys('user:*')
+    // 使用SCAN命令替代KEYS命令，避免阻塞Redis服务器
+    const keys = []
+    let cursor = '0'
+
+    do {
+      const result = await client.scan(cursor, 'MATCH', 'user:*', 'COUNT', 100)
+      cursor = result[0]
+      keys.push(...result[1])
+    } while (cursor !== '0')
+
     if (!keys.length) {
       logger.info('没有找到任何账户', 'REDIS', '✅')
       return []
@@ -364,7 +373,17 @@ const redisClient = {
 
   async keys(pattern) {
     const client = await ensureConnection()
-    return client.keys(pattern)
+    // 使用SCAN命令替代KEYS命令，避免阻塞Redis服务器
+    const keys = []
+    let cursor = '0'
+
+    do {
+      const result = await client.scan(cursor, 'MATCH', pattern, 'COUNT', 100)
+      cursor = result[0]
+      keys.push(...result[1])
+    } while (cursor !== '0')
+
+    return keys
   },
 
   async del(key) {
