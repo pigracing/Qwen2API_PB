@@ -139,14 +139,13 @@ const sendT2INewChatRequest = async (body, retryCount, lastUsedEmail = null,url 
       headers: {
         'Authorization': `Bearer ${currentToken}`,
         'Content-Type': 'application/json',
-        "Connection": "keep-alive",
         "Accept": "*/*",
         "Accept-Encoding": "gzip, deflate, br, zstd",
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
       },
       responseType: responseType ? responseType : body.stream ? 'stream' : 'json',
-      timeout: REQUEST_CONFIG.timeout,
+      timeout: 300000,
       validateStatus: (status) => status < 500 // 只有5xx错误才抛出异常
     }
 

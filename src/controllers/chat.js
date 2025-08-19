@@ -350,7 +350,7 @@ const createNewChatCompletion = async (req, res) => {
             "chat_mode": "normal",
             "incremental_output": true,
             "model": model,
-            "messages": messages,
+            "messages": messages.slice(-1),
             "stream": true,
             "chat_type": chat_type,
             "id": generateUUID(),
@@ -358,7 +358,6 @@ const createNewChatCompletion = async (req, res) => {
             "session_id": generateUUID(),
             "timestamp": new Date().getTime()
         }
-
         const img_response_data = await sendT2IRequest(imgReqBody, 1, "", getImageURL, "json", _currentToken)
 
         try {
