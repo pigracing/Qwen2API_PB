@@ -29,4 +29,4 @@ jobs:
           push: true
           context: .
           file: ./Dockerfile   # 指定 Dockerfile 路径
-          tags: ricebug/qwen2api:${{ steps.date.outputs.date }}
+          tags: ricebug/qwen2api:v${{ steps.date.outputs.date }}
