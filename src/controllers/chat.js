@@ -1,6 +1,6 @@
 const { isJson, generateUUID } = require('../utils/tools.js')
 const { createUsageObject } = require('../utils/precise-tokenizer.js')
-const { sendChatRequest, sendT2IRequest, REQUEST_CONFIG } = require('../utils/request.js')
+const { sendChatRequest, sendT2INewChatRequest,sendT2IRequest, REQUEST_CONFIG } = require('../utils/request.js')
 const accountManager = require('../utils/account.js')
 const config = require('../config/index.js')
 const { logger } = require('../utils/logger')
@@ -312,7 +312,7 @@ const createNewChatCompletion = async (req, res) => {
             "chat_type": "t2i",
             "timestamp": new Date().getTime()
         };
-        const response_data = await sendChatRequest(reqBody, 1, "", REQUEST_CONFIG.t2iEndpoint)
+        const response_data = await sendT2INewChatRequest(reqBody, 1, "", REQUEST_CONFIG.t2iEndpoint)
 
         if (response_data.status !== 200 || !response_data.response) {
             res.status(500)
