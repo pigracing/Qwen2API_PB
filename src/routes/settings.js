@@ -1,13 +1,18 @@
 const express = require('express')
 const router = express.Router()
 const config = require('../config')
-const { apiKeyVerify } = require('../middlewares/authorization')
+const { apiKeyVerify, adminKeyVerify } = require('../middlewares/authorization')
 const { logger } = require('../utils/logger')
 
 
-router.get('/settings', apiKeyVerify, async (req, res) => {
+router.get('/settings', adminKeyVerify, async (req, res) => {
+  // 分离管理员密钥和普通密钥
+  const regularKeys = config.apiKeys.filter(key => key !== config.adminKey)
+
   res.json({
-    apiKey: config.apiKey,
+    apiKey: config.apiKey, // 保持向后兼容
+    adminKey: config.adminKey,
+    regularKeys: regularKeys,
     defaultHeaders: config.defaultHeaders,
     defaultCookie: config.defaultCookie,
     autoRefresh: config.autoRefresh,
@@ -17,23 +22,59 @@ router.get('/settings', apiKeyVerify, async (req, res) => {
   })
 })
 
-// 更新API Key
-router.post('/setApiKey', apiKeyVerify, async (req, res) => {
+// 添加普通API Key
+router.post('/addRegularKey', adminKeyVerify, async (req, res) => {
   try {
     const { apiKey } = req.body
     if (!apiKey) {
       return res.status(400).json({ error: 'API Key不能为空' })
     }
-    config.apiKey = apiKey
-    res.json({ message: 'API Key更新成功' })
+
+    // 检查是否已存在
+    if (config.apiKeys.includes(apiKey)) {
+      return res.status(409).json({ error: 'API Key已存在' })
+    }
+
+    // 添加到配置中
+    config.apiKeys.push(apiKey)
+
+    res.json({ message: 'API Key添加成功' })
   } catch (error) {
-    logger.error('更新API Key失败', 'CONFIG', '', error)
+    logger.error('添加API Key失败', 'CONFIG', '', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// 删除普通API Key
+router.post('/deleteRegularKey', adminKeyVerify, async (req, res) => {
+  try {
+    const { apiKey } = req.body
+    if (!apiKey) {
+      return res.status(400).json({ error: 'API Key不能为空' })
+    }
+
+    // 不能删除管理员密钥
+    if (apiKey === config.adminKey) {
+      return res.status(403).json({ error: '不能删除管理员密钥' })
+    }
+
+    // 从配置中移除
+    const index = config.apiKeys.indexOf(apiKey)
+    if (index === -1) {
+      return res.status(404).json({ error: 'API Key不存在' })
+    }
+
+    config.apiKeys.splice(index, 1)
+
+    res.json({ message: 'API Key删除成功' })
+  } catch (error) {
+    logger.error('删除API Key失败', 'CONFIG', '', error)
     res.status(500).json({ error: error.message })
   }
 })
 
 // 更新自动刷新设置
-router.post('/setAutoRefresh', apiKeyVerify, async (req, res) => {
+router.post('/setAutoRefresh', adminKeyVerify, async (req, res) => {
   try {
     const { autoRefresh, autoRefreshInterval } = req.body
 
@@ -60,7 +101,7 @@ router.post('/setAutoRefresh', apiKeyVerify, async (req, res) => {
 })
 
 // 更新思考输出设置
-router.post('/setOutThink', apiKeyVerify, async (req, res) => {
+router.post('/setOutThink', adminKeyVerify, async (req, res) => {
   try {
     const { outThink } = req.body;
     if (typeof outThink !== 'boolean') {
@@ -79,7 +120,7 @@ router.post('/setOutThink', apiKeyVerify, async (req, res) => {
 })
 
 // 更新搜索信息模式
-router.post('/search-info-mode', apiKeyVerify, async (req, res) => {
+router.post('/search-info-mode', adminKeyVerify, async (req, res) => {
   try {
     const { searchInfoMode } = req.body
     if (!['table', 'text'].includes(searchInfoMode)) {

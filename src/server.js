@@ -22,11 +22,7 @@ if (config.dataSaveMode === 'file') {
 app.use(bodyParser.json({ limit: '128mb' }))
 app.use(bodyParser.urlencoded({ limit: '128mb', extended: true }))
 app.use(cors())
-// 处理错误中间件
-app.use((err, req, res, next) => {
-  logger.error('服务器内部错误', 'SERVER', '', err)
-  res.status(500).send('服务器内部错误')
-})
+
 // API路由
 app.use(modelsRouter)
 app.use(chatRouter)
@@ -44,6 +40,12 @@ app.get('*', (req, res) => {
       res.status(500).send('服务器内部错误')
     }
   })
+})
+
+// 处理错误中间件（必须放在所有路由之后）
+app.use((err, req, res, next) => {
+  logger.error('服务器内部错误', 'SERVER', '', err)
+  res.status(500).send('服务器内部错误')
 })
 
 

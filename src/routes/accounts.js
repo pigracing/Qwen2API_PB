@@ -3,7 +3,7 @@ const router = express.Router()
 const accountManager = require('../utils/account')
 const { logger } = require('../utils/logger')
 const { JwtDecode } = require('../utils/tools')
-const { apiKeyVerify } = require('../middlewares/authorization')
+const { adminKeyVerify } = require('../middlewares/authorization')
 const { deleteAccount, saveAccounts, refreshAccountToken } = require('../utils/setting')
 
 /**
@@ -13,7 +13,7 @@ const { deleteAccount, saveAccounts, refreshAccountToken } = require('../utils/s
  * @param {number} pageSize 每页数量
  * @returns {Object} 账号列表
  */
-router.get('/getAllAccounts', apiKeyVerify, async (req, res) => {
+router.get('/getAllAccounts', adminKeyVerify, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1
     const pageSize = parseInt(req.query.pageSize) || 1000
@@ -56,7 +56,7 @@ router.get('/getAllAccounts', apiKeyVerify, async (req, res) => {
  * @param {string} password 密码
  * @returns {Object} 账号信息
  */
-router.post('/setAccount', apiKeyVerify, async (req, res) => {
+router.post('/setAccount', adminKeyVerify, async (req, res) => {
   try {
     const { email, password } = req.body
 
@@ -101,7 +101,7 @@ router.post('/setAccount', apiKeyVerify, async (req, res) => {
  * @param {string} email 邮箱
  * @returns {Object} 账号信息
  */
-router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
+router.delete('/deleteAccount', adminKeyVerify, async (req, res) => {
   try {
     const { email } = req.body
 
@@ -133,7 +133,7 @@ router.delete('/deleteAccount', apiKeyVerify, async (req, res) => {
  * @param {string} accounts 账号列表
  * @returns {Object} 账号信息
  */
-router.post('/setAccounts', apiKeyVerify, async (req, res) => {
+router.post('/setAccounts', adminKeyVerify, async (req, res) => {
   try {
     let { accounts } = req.body
     if (!accounts) {
@@ -177,7 +177,7 @@ router.post('/setAccounts', apiKeyVerify, async (req, res) => {
  * @param {string} email 邮箱
  * @returns {Object} 刷新结果
  */
-router.post('/refreshAccount', apiKeyVerify, async (req, res) => {
+router.post('/refreshAccount', adminKeyVerify, async (req, res) => {
   try {
     const { email } = req.body
 
@@ -215,7 +215,7 @@ router.post('/refreshAccount', apiKeyVerify, async (req, res) => {
  * @param {number} thresholdHours 过期阈值（小时），默认24小时
  * @returns {Object} 刷新结果
  */
-router.post('/refreshAllAccounts', apiKeyVerify, async (req, res) => {
+router.post('/refreshAllAccounts', adminKeyVerify, async (req, res) => {
   try {
     const { thresholdHours = 24 } = req.body
 
@@ -239,7 +239,7 @@ router.post('/refreshAllAccounts', apiKeyVerify, async (req, res) => {
  *
  * @returns {Object} 刷新结果
  */
-router.post('/forceRefreshAllAccounts', apiKeyVerify, async (req, res) => {
+router.post('/forceRefreshAllAccounts', adminKeyVerify, async (req, res) => {
   try {
     // 强制刷新所有账号（设置阈值为很大的值，确保所有账号都会被刷新）
     const refreshedCount = await accountManager.autoRefreshTokens(8760) // 365天

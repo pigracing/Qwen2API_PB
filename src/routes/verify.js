@@ -1,18 +1,23 @@
 const express = require('express')
 const router = express.Router()
 const config = require('../config/index.js')
+const { validateApiKey } = require('../middlewares/authorization')
 
 router.post('/verify', (req, res) => {
   const apiKey = req.body.apiKey
-  if (!apiKey || apiKey != config.apiKey) {
+  const { isValid, isAdmin } = validateApiKey(apiKey)
+
+  if (!isValid) {
     return res.status(401).json({
       status: 401,
       message: 'Unauthorized'
     })
   }
+
   res.status(200).json({
     status: 200,
-    message: 'success'
+    message: 'success',
+    isAdmin: isAdmin
   })
 })
 

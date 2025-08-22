@@ -1,16 +1,37 @@
 const dotenv = require('dotenv')
 dotenv.config()
 
+/**
+ * 解析API_KEY环境变量，支持逗号分隔的多个key
+ * @returns {Object} 包含apiKeys数组和adminKey的对象
+ */
+const parseApiKeys = () => {
+  const apiKeyEnv = process.env.API_KEY
+  if (!apiKeyEnv) {
+    return { apiKeys: [], adminKey: null }
+  }
+
+  const keys = apiKeyEnv.split(',').map(key => key.trim()).filter(key => key.length > 0)
+  return {
+    apiKeys: keys,
+    adminKey: keys.length > 0 ? keys[0] : null
+  }
+}
+
+const { apiKeys, adminKey } = parseApiKeys()
+
 const config = {
   dataSaveMode: process.env.DATA_SAVE_MODE || "none",
-  apiKey: process.env.API_KEY || null,
+  apiKey: process.env.API_KEY || null, // 保持向后兼容
+  apiKeys: apiKeys, // 新增：所有API keys数组
+  adminKey: adminKey, // 新增：管理员key（第一个key）
   listenAddress: process.env.LISTEN_ADDRESS || null,
   listenPort: process.env.SERVICE_PORT || 3000,
   apiPrefix: process.env.API_PREFIX || '',
   searchInfoMode: process.env.SEARCH_INFO_MODE === 'table' ? "table" : "text",
   outThink: process.env.OUTPUT_THINK === 'true' ? true : false,
   redisURL: process.env.REDIS_URL || null,
-  autoRefresh: false,
+  autoRefresh: true, // 修改：默认开启自动刷新
   autoRefreshInterval: 6 * 60 * 60,
   cacheMode: process.env.CACHE_MODE || "default",
   // 日志配置

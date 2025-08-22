@@ -19,8 +19,6 @@
 - Docker (可选)
 - Redis (可选，用于数据持久化)
 
-> 💡 **提示**: 如果使用二进制文件部署，无需安装 Node.js 环境
-
 ### ⚙️ 环境配置
 
 创建 `.env` 文件并配置以下参数：
@@ -32,7 +30,7 @@ LISTEN_ADDRESS=localhost       # 监听地址
 SERVICE_PORT=3000             # 服务端口
 
 # 🔐 安全配置
-API_KEY=sk-123456             # API 密钥 (必填)
+API_KEY=sk-123456,sk-456789   # API 密钥 (必填，支持多密钥)
 ACCOUNTS=                     # 账户配置 (格式: user1:pass1,user2:pass2)
 
 # 🚀 PM2 多进程配置
@@ -59,7 +57,7 @@ CACHE_MODE=default            # 图片缓存模式 (default/file)
 | `API_PREFIX` | API 路径前缀，不填则为根路径 | `/api` → `http://localhost:3000/api` |
 | `LISTEN_ADDRESS` | 服务监听地址 | `localhost` 或 `0.0.0.0` |
 | `SERVICE_PORT` | 服务运行端口 | `3000` |
-| `API_KEY` | API 访问密钥 (必填) | `sk-your-secret-key` |
+| `API_KEY` | API 访问密钥，支持多密钥配置。第一个为管理员密钥（可访问前端管理页面），其他为普通密钥（仅可调用API）。多个密钥用逗号分隔 | `sk-admin123,sk-user456,sk-user789` |
 | `PM2_INSTANCES` | PM2进程数量 | `1`/`4`/`max` |
 | `PM2_MAX_MEMORY` | PM2内存限制 | `100M`/`1G`/`2G` |
 | `SEARCH_INFO_MODE` | 搜索结果展示格式 | `table` 或 `text` |
@@ -72,6 +70,36 @@ CACHE_MODE=default            # 图片缓存模式 (default/file)
 | `LOG_DIR` | 日志文件目录 | `./logs` |
 | `MAX_LOG_FILE_SIZE` | 最大日志文件大小(MB) | `10` |
 | `MAX_LOG_FILES` | 保留的日志文件数量 | `5` |
+
+#### 🔑 多API_KEY配置说明
+
+`API_KEY` 环境变量支持配置多个API密钥，用于实现不同权限级别的访问控制：
+
+**配置格式:**
+```bash
+# 单个密钥（管理员权限）
+API_KEY=sk-admin123
+
+# 多个密钥（第一个为管理员，其他为普通用户）
+API_KEY=sk-admin123,sk-user456,sk-user789
+```
+
+**权限说明:**
+
+| 密钥类型 | 权限范围 | 功能描述 |
+|----------|----------|----------|
+| **管理员密钥** | 完整权限 | • 访问前端管理页面<br>• 修改系统设置<br>• 调用所有API接口<br>• 添加/删除普通密钥 |
+| **普通密钥** | API调用权限 | • 仅可调用API接口<br>• 无法访问前端管理页面<br>• 无法修改系统设置 |
+
+**使用场景:**
+- **团队协作**: 为不同团队成员分配不同权限的API密钥
+- **应用集成**: 为第三方应用提供受限的API访问权限
+- **安全隔离**: 将管理权限与普通使用权限分离
+
+**注意事项:**
+- 第一个API_KEY自动成为管理员密钥，拥有最高权限
+- 管理员可以通过前端页面动态添加或删除普通密钥
+- 所有密钥都可以正常调用API接口，权限差异仅体现在管理功能上
 
 #### 📸 CACHE_MODE 缓存模式说明
 
@@ -110,9 +138,21 @@ caches/
 #### 方式一：直接运行
 
 ```bash
+# 单个API密钥部署
 docker run -d \
   -p 3000:3000 \
-  -e API_KEY=sk-your-secret-key \
+  -e API_KEY=sk-your-admin-key \
+  -e DATA_SAVE_MODE=none \
+  -e CACHE_MODE=file \
+  -e ACCOUNTS= \
+  -v ./caches:/app/caches \
+  --name qwen2api \
+  rfym21/qwen2api:latest
+
+# 多个API密钥部署（推荐）
+docker run -d \
+  -p 3000:3000 \
+  -e API_KEY=sk-admin123,sk-user456,sk-user789 \
   -e DATA_SAVE_MODE=none \
   -e CACHE_MODE=file \
   -e ACCOUNTS= \
@@ -260,6 +300,27 @@ Qwen2API/
 ```
 
 ## 📖 API 文档
+
+### 🔐 API 认证说明
+
+本API支持多密钥认证机制，所有API请求都需要在请求头中包含有效的API密钥：
+
+```http
+Authorization: Bearer sk-your-api-key
+```
+
+**支持的密钥类型:**
+- **管理员密钥**: 第一个配置的API_KEY，拥有完整权限
+- **普通密钥**: 其他配置的API_KEY，仅可调用API接口
+
+**认证示例:**
+```bash
+# 使用管理员密钥
+curl -H "Authorization: Bearer sk-admin123" http://localhost:3000/v1/models
+
+# 使用普通密钥
+curl -H "Authorization: Bearer sk-user456" http://localhost:3000/v1/chat/completions
+```
 
 ### 🔍 获取模型列表
 

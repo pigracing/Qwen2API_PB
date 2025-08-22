@@ -42,13 +42,27 @@ router.beforeEach(async (to, from, next) => {
         })
 
         if (verifyResponse.data.status === 200) {
+          const isAdmin = verifyResponse.data.isAdmin
+
+          // 存储用户权限信息
+          localStorage.setItem('isAdmin', isAdmin.toString())
+
+          // 检查是否需要管理员权限
+          if ((to.path === '/' || to.path === '/settings') && !isAdmin) {
+            alert('您没有访问管理页面的权限')
+            next({ path: '/auth' })
+            return
+          }
+
           next()
         } else {
           localStorage.removeItem('apiKey')
+          localStorage.removeItem('isAdmin')
           next({ path: '/auth' })
         }
       } catch (error) {
         localStorage.removeItem('apiKey')
+        localStorage.removeItem('isAdmin')
         next({ path: '/auth' })
       }
     }
