@@ -14,7 +14,7 @@ const isChatType = (model, search) => {
   if (!model) return 't2t'
   if (model.includes('-search') || search) {
     return 'search'
-  } else if(model.includes('-t2i')){
+  } else if(model.includes('-image')){
     return 't2i'
   }else {
     return 't2t'

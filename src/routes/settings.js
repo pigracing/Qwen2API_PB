@@ -18,7 +18,8 @@ router.get('/settings', adminKeyVerify, async (req, res) => {
     autoRefresh: config.autoRefresh,
     autoRefreshInterval: config.autoRefreshInterval,
     outThink: config.outThink,
-    searchInfoMode: config.searchInfoMode
+    searchInfoMode: config.searchInfoMode,
+    simpleModelMap: config.simpleModelMap
   })
 })
 
@@ -134,6 +135,25 @@ router.post('/search-info-mode', adminKeyVerify, async (req, res) => {
     })
   } catch (error) {
     logger.error('更新搜索信息模式失败', 'CONFIG', '', error)
+    res.status(500).json({ error: error.message })
+  }
+})
+
+// 更新简化模型映射设置
+router.post('/simple-model-map', adminKeyVerify, async (req, res) => {
+  try {
+    const { simpleModelMap } = req.body
+    if (typeof simpleModelMap !== 'boolean') {
+      return res.status(400).json({ error: '无效的简化模型映射设置' })
+    }
+
+    config.simpleModelMap = simpleModelMap
+    res.json({
+      status: true,
+      message: '简化模型映射设置更新成功'
+    })
+  } catch (error) {
+    logger.error('更新简化模型映射设置失败', 'CONFIG', '', error)
     res.status(500).json({ error: error.message })
   }
 })

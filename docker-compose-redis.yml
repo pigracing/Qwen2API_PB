@@ -9,9 +9,6 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
     environment:
-      # API 路径，不填则为空(http://localhost:3000)
-      # 示例(/api) 则访问 http://localhost:3000/api
-      - API_PREFIX=
       # 如果需要修改Docker暴露端口，请修改ports中的参数
       # 示例(8080:3000) 则访问 http://localhost:8080
       - SERVICE_PORT=3000
@@ -32,6 +29,8 @@ services:
       - SEARCH_INFO_MODE=table
       # 是否输出思考过程
       - OUTPUT_THINK=true
+      # 简化模型映射 (true: 只返回基础模型, false: 返回完整模型列表)
+      - SIMPLE_MODEL_MAP=false
       # redis 连接地址(必填)
       - REDIS_URL=redis://redis:6379
       # 数据保存模式

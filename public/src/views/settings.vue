@@ -102,6 +102,21 @@
                                 class="w-full mt-2 bg-black text-white rounded-lg py-2 hover:bg-white hover:text-black border border-black transition-all duration-300">保存</button>
                         </div>
                     </div>
+                    <!-- 简化模型映射 -->
+                    <div class="setting-card relative overflow-hidden rounded-2xl p-6 flex flex-col gap-4">
+                        <div class="absolute inset-0 bg-white/30 backdrop-blur-md border border-white/30 rounded-2xl">
+                        </div>
+                        <div class="relative flex flex-col gap-2">
+                            <label class="text-gray-700 font-semibold">🎯 简化模型映射</label>
+                            <div class="flex items-center gap-2">
+                                <input v-model="settings.simpleModelMap" type="checkbox"
+                                    class="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                                <span>只返回基础模型，不包含thinking、search、image等变体</span>
+                            </div>
+                            <button @click="saveSimpleModelMap"
+                                class="w-full mt-2 bg-black text-white rounded-lg py-2 hover:bg-white hover:text-black border border-black transition-all duration-300">保存</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -141,7 +156,8 @@ const settings = ref({
     autoRefresh: false,
     autoRefreshInterval: 21600,
     outThink: false,
-    searchInfoMode: 'table'
+    searchInfoMode: 'table',
+    simpleModelMap: false
 })
 
 const showAddKeyModal = ref(false)
@@ -163,6 +179,7 @@ const loadSettings = async () => {
         settings.value.autoRefreshInterval = res.data.autoRefreshInterval
         settings.value.outThink = res.data.outThink
         settings.value.searchInfoMode = res.data.searchInfoMode
+        settings.value.simpleModelMap = res.data.simpleModelMap
     } catch (error) {
         console.error('加载设置失败:', error)
     }
@@ -209,6 +226,16 @@ const saveSearchInfoMode = async () => {
         alert('搜索信息模式保存成功')
     } catch (error) {
         alert('搜索信息模式保存失败: ' + error.message)
+    }
+}
+const saveSimpleModelMap = async () => {
+    try {
+        await axios.post('/api/simple-model-map', { simpleModelMap: settings.value.simpleModelMap }, {
+            headers: { 'Authorization': localStorage.getItem('apiKey') || '' }
+        })
+        alert('简化模型映射设置保存成功')
+    } catch (error) {
+        alert('简化模型映射设置保存失败: ' + error.message)
     }
 }
 

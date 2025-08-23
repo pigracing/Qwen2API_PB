@@ -1,11 +1,10 @@
 const express = require('express')
 const router = express.Router()
-const config = require('../config/index.js')
 const { apiKeyVerify } = require('../middlewares/authorization.js')
 const { handleCliChatCompletion } = require('../controllers/cli.chat.js')
 const accountManager = require('../utils/account.js')
 
-router.post(`${config.apiPrefix ? config.apiPrefix : ''}/cli/v1/chat/completions`,
+router.post('/cli/v1/chat/completions',
     apiKeyVerify,
     async (req, res, next) => {
         // 异步初始化新账号（不阻塞当前请求）

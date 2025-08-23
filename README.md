@@ -25,7 +25,6 @@
 
 ```bash
 # 🌐 服务配置
-API_PREFIX=                    # API 路径前缀 (可选)
 LISTEN_ADDRESS=localhost       # 监听地址
 SERVICE_PORT=3000             # 服务端口
 
@@ -41,6 +40,7 @@ PM2_MAX_MEMORY=1G             # PM2内存限制 (100M/1G/2G等)
 # 🔍 功能配置
 SEARCH_INFO_MODE=table        # 搜索信息展示模式 (table/text)
 OUTPUT_THINK=true             # 是否输出思考过程 (true/false)
+SIMPLE_MODEL_MAP=false        # 简化模型映射 (true/false)
 
 # 🗄️ 数据存储
 DATA_SAVE_MODE=none           # 数据保存模式 (none/file/redis)
@@ -54,7 +54,6 @@ CACHE_MODE=default            # 图片缓存模式 (default/file)
 
 | 参数 | 说明 | 示例 |
 |------|------|------|
-| `API_PREFIX` | API 路径前缀，不填则为根路径 | `/api` → `http://localhost:3000/api` |
 | `LISTEN_ADDRESS` | 服务监听地址 | `localhost` 或 `0.0.0.0` |
 | `SERVICE_PORT` | 服务运行端口 | `3000` |
 | `API_KEY` | API 访问密钥，支持多密钥配置。第一个为管理员密钥（可访问前端管理页面），其他为普通密钥（仅可调用API）。多个密钥用逗号分隔 | `sk-admin123,sk-user456,sk-user789` |
@@ -62,6 +61,7 @@ CACHE_MODE=default            # 图片缓存模式 (default/file)
 | `PM2_MAX_MEMORY` | PM2内存限制 | `100M`/`1G`/`2G` |
 | `SEARCH_INFO_MODE` | 搜索结果展示格式 | `table` 或 `text` |
 | `OUTPUT_THINK` | 是否显示 AI 思考过程 | `true` 或 `false` |
+| `SIMPLE_MODEL_MAP` | 简化模型映射，只返回基础模型不包含变体 | `true` 或 `false` |
 | `DATA_SAVE_MODE` | 数据持久化方式 | `none`/`file`/`redis` |
 | `REDIS_URL` | Redis 数据库连接 | `redis://localhost:6379` |
 | `CACHE_MODE` | 图片缓存存储方式 | `default`/`file` |

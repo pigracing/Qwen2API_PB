@@ -22,19 +22,17 @@ const { apiKeys, adminKey } = parseApiKeys()
 
 const config = {
   dataSaveMode: process.env.DATA_SAVE_MODE || "none",
-  apiKey: process.env.API_KEY || null, // 保持向后兼容
-  apiKeys: apiKeys, // 新增：所有API keys数组
-  adminKey: adminKey, // 新增：管理员key（第一个key）
+  apiKeys: apiKeys,
+  adminKey: adminKey,
+  simpleModelMap: process.env.SIMPLE_MODEL_MAP === 'true' ? true : false,
   listenAddress: process.env.LISTEN_ADDRESS || null,
   listenPort: process.env.SERVICE_PORT || 3000,
-  apiPrefix: process.env.API_PREFIX || '',
   searchInfoMode: process.env.SEARCH_INFO_MODE === 'table' ? "table" : "text",
   outThink: process.env.OUTPUT_THINK === 'true' ? true : false,
   redisURL: process.env.REDIS_URL || null,
-  autoRefresh: true, // 修改：默认开启自动刷新
+  autoRefresh: true,
   autoRefreshInterval: 6 * 60 * 60,
   cacheMode: process.env.CACHE_MODE || "default",
-  // 日志配置
   logLevel: process.env.LOG_LEVEL || "INFO",
   enableFileLog: process.env.ENABLE_FILE_LOG === 'true',
   logDir: process.env.LOG_DIR || "./logs",

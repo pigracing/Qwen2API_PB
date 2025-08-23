@@ -2,7 +2,6 @@ const config = require('../config/index.js')
 const DataPersistence = require('./data-persistence')
 const TokenManager = require('./token-manager')
 const AccountRotator = require('./account-rotator')
-const { generateApiModelList, getBaseModels } = require('./model-utils')
 const { logger } = require('./logger')
 /**
  * 账户管理器
@@ -395,13 +394,7 @@ class Account {
         }
     }
 
-    /**
-     * 获取模型列表（OpenAI API 格式）
-     * @returns {Promise<Object>} 模型列表
-     */
-    async getModelList() {
-        return generateApiModelList()
-    }
+
 
     /**
      * 生成 Markdown 表格
@@ -442,13 +435,7 @@ class Account {
         return markdown
     }
 
-    /**
-     * 获取基础模型列表
-     * @returns {Promise<Array<string>>} 基础模型列表
-     */
-    async getModels() {
-        return getBaseModels()
-    }
+
 
     /**
      * 获取所有账户信息

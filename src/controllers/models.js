@@ -1,59 +1,75 @@
-const ModelsMap = require('../models/models-map.js')
+const { getLatestModels } = require('../models/models-map.js')
+const config = require('../config/index.js')
 
 const handleGetModels = async (req, res) => {
-  const models = []
+    const models = []
 
-  for (const model in ModelsMap) {
-    const modelData = {
-      "id": model,
-      "name": model,
-      "object": "model",
-      "owned_by": "openai",
-      ...ModelsMap[model],
-      "updated_at": new Date().getTime() / 1000,
-      "created_at": new Date().getTime() / 1000
+    const ModelsMap = await getLatestModels()
+
+    for (const model of ModelsMap) {
+        delete model.name
+        models.push(model)
+
+        if (config.simpleModelMap) {
+            continue
+        }
+
+        const isThinking = model?.info?.meta?.abilities?.thinking
+        const isSearch = model?.info?.meta?.chat_type?.includes('search')
+        const isImage = model?.info?.meta?.chat_type?.includes('t2i')
+        const isVideo = model?.info?.meta?.chat_type?.includes('t2v')
+        const isImageEdit = model?.info?.meta?.chat_type?.includes('image_edit')
+        const isDeepResearch = model?.info?.meta?.chat_type?.includes('deep_research')
+
+        if (isThinking) {
+            const newModelData = JSON.parse(JSON.stringify(model))
+            newModelData.id = `${model.id}-thinking`
+
+            models.push(newModelData)
+        }
+
+        if (isSearch) {
+            const newModelData = JSON.parse(JSON.stringify(model))
+            newModelData.id = `${model.id}-search`
+            models.push(newModelData)
+        }
+
+        if (isThinking && isSearch) {
+            const newModelData = JSON.parse(JSON.stringify(model))
+            newModelData.id = `${model.id}-thinking-search`
+            models.push(newModelData)
+        }
+
+        if (isImage) {
+            const newModelData = JSON.parse(JSON.stringify(model))
+            newModelData.id = `${model.id}-image`
+            models.push(newModelData)
+        }
+
+        if (isVideo) {
+            const newModelData = JSON.parse(JSON.stringify(model))
+            newModelData.id = `${model.id}-video`
+            models.push(newModelData)
+        }
+
+        if (isImageEdit) {
+            const newModelData = JSON.parse(JSON.stringify(model))
+            newModelData.id = `${model.id}-image-edit`
+            models.push(newModelData)
+        }
+
+        if (isDeepResearch) {
+            const newModelData = JSON.parse(JSON.stringify(model))
+            newModelData.id = `${model.id}-deep-research`
+            models.push(newModelData)
+        }
     }
-    const isThinking = ModelsMap[model].abilities.thinking
-    const isSearch = ModelsMap[model].chat_type.includes('search')
-    const isT2i = ModelsMap[model].chat_type.includes('t2i')
-
-    models.push(modelData)
-
-    if (isThinking) {
-      const newModelData = JSON.parse(JSON.stringify(modelData))
-      newModelData.id = `${modelData.id}-thinking`
-      newModelData.name = `${modelData.name}-thinking`
-      models.push(newModelData)
-    }
-
-    if (isSearch) {
-      const newModelData = JSON.parse(JSON.stringify(modelData))
-      newModelData.id = `${modelData.id}-search`
-      newModelData.name = `${modelData.name}-search`
-      models.push(newModelData)
-    }
-
-    if (isThinking && isSearch) {
-      const newModelData = JSON.parse(JSON.stringify(modelData))
-      newModelData.id = `${modelData.id}-thinking-search`
-      newModelData.name = `${modelData.name}-thinking-search`
-      models.push(newModelData)
-    }
-
-    if (isT2i) {
-      const newModelData = JSON.parse(JSON.stringify(modelData))
-      newModelData.id = `${modelData.id}-t2i`
-      newModelData.name = `${modelData.name}-t2i`
-      models.push(newModelData)
-    }
-
-  }
-  res.json({
-    "object": "list",
-    "data": models
-  })
+    res.json({
+        "object": "list",
+        "data": models
+    })
 }
 
 module.exports = {
-  handleGetModels
+    handleGetModels
 }
