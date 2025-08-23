@@ -27,7 +27,6 @@ const processRequestBody = async (req, res, next) => {
       messages,            // 消息历史
       model,               // 模型
       stream,              // 流式输出
-      search,              // 搜索模式
       enable_thinking,     // 是否启用思考
       thinking_budget,      // 思考预算
       size                  //图片尺寸
@@ -40,11 +39,8 @@ const processRequestBody = async (req, res, next) => {
       body.stream = false
     }
     
-    // 处理 incremental_output 参数 : 是否增量输出
-    body.incremental_output = true
-    
     // 处理 chat_type 参数 : 聊天类型
-    body.chat_type = isChatType(model, search)
+    body.chat_type = isChatType(model)
 
     req.enable_web_search = body.chat_type === 'search' ? true : false
     
@@ -61,8 +57,11 @@ const processRequestBody = async (req, res, next) => {
     body.sub_chat_type = body.chat_type
 
     // 处理图片尺寸
-    body.size = size
+    if (size) {
+      body.size = size
+    }
 
+    // 处理请求体,将body赋值给req.body
     req.body = body
 
     next()
