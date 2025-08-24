@@ -38,7 +38,7 @@ const isThinkingEnabled = (model, enable_thinking, thinking_budget) => {
     const thinking_config = {
         "output_schema": "phase",
         "thinking_enabled": false,
-        "thinking_budget": 38912
+        "thinking_budget": 81920
     }
 
     if (!model) return thinking_config
