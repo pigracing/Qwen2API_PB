@@ -58,11 +58,11 @@ const handleGetModels = async (req, res) => {
             models.push(newModelData)
         }
 
-        if (isDeepResearch) {
-            const newModelData = JSON.parse(JSON.stringify(model))
-            newModelData.id = `${model.id}-deep-research`
-            models.push(newModelData)
-        }
+        // if (isDeepResearch) {
+        //     const newModelData = JSON.parse(JSON.stringify(model))
+        //     newModelData.id = `${model.id}-deep-research`
+        //     models.push(newModelData)
+        // }
     }
     res.json({
         "object": "list",
