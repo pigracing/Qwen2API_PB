@@ -252,11 +252,6 @@ const returnResponse = (res, model, contentUrl, stream) => {
 
 const handleVideoCompletion = async (req, res, response_data, token) => {
     try {
-        console.log(response_data);
-        console.log(response_data.data.messages);
-
-
-
         const videoTaskID = response_data?.data?.messages[0]?.extra?.wanx?.task_id
         if (!response_data || !response_data.success || !videoTaskID) {
             throw new Error()
@@ -289,13 +284,14 @@ const handleVideoCompletion = async (req, res, response_data, token) => {
         for (let i = 0; i < maxAttempts; i++) {
             const content = await getVideoTaskStatus(videoTaskID, token)
             if (content) {
-                returnBody.choices[0].message.content = `\n\n</think>\n\n
-<video controls = "controls">
-<source src="${content}" type="video/mp4">
-</video>
-<a href="${content}" download>Download Video</a>
+                returnBody.choices[0].message.content = `
+<video controls = "controls">${content}</video>
+[Download Video](${content})
 `
                 if (req.body.stream) {
+                    const returnBody2 = JSON.parse(JSON.stringify(returnBody))
+                    returnBody2.choices[0].message.content = `\n\n</think>\n\n`
+                    res.write(`data: ${JSON.stringify(returnBody2)}\n\n`)
                     res.write(`data: ${JSON.stringify(returnBody)}\n\n`)
                     res.write(`data: [DONE]\n\n`)
                     res.end()
@@ -305,9 +301,10 @@ const handleVideoCompletion = async (req, res, response_data, token) => {
                 return
             } else if (content == null && req.body.stream) {
                 if (returnBody.choices[0].message.content === "") {
-                    returnBody.choices[0].message.content = "<think>\n\n"
+                    returnBody.choices[0].message.content = `<think>\n\n`
+                    res.write(`data: ${JSON.stringify(returnBody)}\n\n`)
                 }
-                returnBody.choices[0].message.content = `[${Math.floor((i + 1) / maxAttempts * 100)}%] 视频生成中，请稍等...\n`
+                returnBody.choices[0].message.content = `\n[${Math.floor((i + 1) / maxAttempts * 100)}%] 视频生成中，请稍等...\n`
                 res.write(`data: ${JSON.stringify(returnBody)}\n\n`)
             }
 
