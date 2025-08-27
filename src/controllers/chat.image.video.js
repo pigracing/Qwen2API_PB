@@ -258,11 +258,9 @@ const handleVideoCompletion = async (req, res, response_data, token) => {
         }
 
         logger.info(`视频任务ID: ${videoTaskID}`, 'CHAT')
-
-        // 设置响应头
-        setResponseHeaders(res, req.body.stream)
-
         const returnBody = {
+            "id": `chatcmpl-${new Date().getTime()}`,
+            "object": "chat.completion.chunk",
             "created": new Date().getTime(),
             "model": response_data.data.model,
             "choices": [
@@ -271,7 +269,8 @@ const handleVideoCompletion = async (req, res, response_data, token) => {
                     "message": {
                         "role": "assistant",
                         "content": ""
-                    }
+                    },
+                    "finish_reason": null
                 }
             ]
         }
@@ -285,13 +284,16 @@ const handleVideoCompletion = async (req, res, response_data, token) => {
             const content = await getVideoTaskStatus(videoTaskID, token)
             if (content) {
                 returnBody.choices[0].message.content = `
-<video controls = "controls">${content}</video>
+<video controls = "controls">
+${content}
+</video>
+
 [Download Video](${content})
 `
+                // 设置响应头
+                setResponseHeaders(res, req.body.stream)
+
                 if (req.body.stream) {
-                    const returnBody2 = JSON.parse(JSON.stringify(returnBody))
-                    returnBody2.choices[0].message.content = `\n\n</think>\n\n`
-                    res.write(`data: ${JSON.stringify(returnBody2)}\n\n`)
                     res.write(`data: ${JSON.stringify(returnBody)}\n\n`)
                     res.write(`data: [DONE]\n\n`)
                     res.end()
@@ -300,11 +302,7 @@ const handleVideoCompletion = async (req, res, response_data, token) => {
                 }
                 return
             } else if (content == null && req.body.stream) {
-                if (returnBody.choices[0].message.content === "") {
-                    returnBody.choices[0].message.content = `<think>\n\n`
-                    res.write(`data: ${JSON.stringify(returnBody)}\n\n`)
-                }
-                returnBody.choices[0].message.content = `\n[${Math.floor((i + 1) / maxAttempts * 100)}%] 视频生成中，请稍等...\n`
+                // 发送空数据保活
                 res.write(`data: ${JSON.stringify(returnBody)}\n\n`)
             }
 
