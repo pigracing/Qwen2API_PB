@@ -9,3 +9,4 @@ logs/
 pkg_dist/*
 pkg_dist/
 .idea
+/public/dist
