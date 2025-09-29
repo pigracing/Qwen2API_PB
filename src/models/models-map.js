@@ -1,5 +1,6 @@
 const axios = require('axios')
 const accountManager = require('../utils/account.js')
+const config = require('../config/index.js')
 
 let cachedModels = null
 let fetchPromise = null
@@ -17,9 +18,13 @@ const getLatestModels = async (force = false) => {
     
     fetchPromise = axios.get('https://chat.qwen.ai/api/models', {
         headers: {
-            'Authorization': `Bearer ${accountManager.getAccountToken()}`
+            'Authorization': `Bearer ${accountManager.getAccountToken()}`,
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
         }
     }).then(response => {
+        console.log(response)
         cachedModels = response.data.data
         fetchPromise = null
         return cachedModels
