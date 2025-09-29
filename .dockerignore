@@ -99,5 +99,3 @@ docs/
 .gitignore
 .github/
 
-public/node_modules
-public/src
