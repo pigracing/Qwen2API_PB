@@ -6,7 +6,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ./data/data.json:/app/data/data.json
+      - ./data:/app/data
       - ./logs:/app/logs
     environment:
       # 如果需要修改Docker暴露端口，请修改ports中的参数

@@ -49,7 +49,7 @@ class DataPersistence {
           return await this._saveToRedis(email, accountData)
         case 'file':
           return await this._saveToFile(email, accountData)
-        case 'env':
+        case 'none':
           logger.warn('环境变量模式不支持保存账户数据', 'DATA')
           return false
         default:
@@ -74,7 +74,7 @@ class DataPersistence {
           return await this._saveAllToRedis(accounts)
         case 'file':
           return await this._saveAllToFile(accounts)
-        case 'env':
+        case 'none':
           logger.warn('环境变量模式不支持保存账户数据', 'DATA')
           return false
         default:
