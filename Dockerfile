@@ -18,7 +18,7 @@ COPY . .
 RUN cd public && npm install && npm run build
 
 # 删除前端不必要文件
-RUN rm -rf public/src public/node_modules public/package*.json
+# RUN rm -rf public/src public/node_modules public/package*.json
 
 # 设置权限
 RUN chmod 777 /app
