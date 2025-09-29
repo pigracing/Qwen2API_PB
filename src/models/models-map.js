@@ -24,7 +24,7 @@ const getLatestModels = async (force = false) => {
             ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
         }
     }).then(response => {
-        console.log(response)
+        // console.log(response)
         cachedModels = response.data.data
         fetchPromise = null
         return cachedModels
