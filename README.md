@@ -138,18 +138,6 @@ caches/
 #### 方式一：直接运行
 
 ```bash
-# 单个API密钥部署
-docker run -d \
-  -p 3000:3000 \
-  -e API_KEY=sk-your-admin-key \
-  -e DATA_SAVE_MODE=none \
-  -e CACHE_MODE=file \
-  -e ACCOUNTS= \
-  -v ./caches:/app/caches \
-  --name qwen2api \
-  rfym21/qwen2api:latest
-
-# 多个API密钥部署（推荐）
 docker run -d \
   -p 3000:3000 \
   -e API_KEY=sk-admin123,sk-user456,sk-user789 \

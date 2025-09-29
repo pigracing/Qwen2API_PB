@@ -77,7 +77,7 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
             while (true) {
                 const dataStart = buffer.indexOf('data: ', startIndex)
                 if (dataStart === -1) break
-                
+
                 const dataEnd = buffer.indexOf('\n\n', dataStart)
                 if (dataEnd === -1) break
 
@@ -239,7 +239,8 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
  */
 const handleNonStreamResponse = async (res, response, enable_thinking, enable_web_search, model, requestBody = null) => {
     try {
-        const content = response.choices[0].message.content
+        // console.log(JSON.stringify(response))
+        const content = response.data.choices[0].message.content
 
         // 提取prompt文本用于token估算
         let promptText = ''
@@ -309,23 +310,8 @@ const handleChatCompletion = async (req, res) => {
     const enable_thinking = req.enable_thinking
     const enable_web_search = req.enable_web_search
 
-    const token = accountManager.getAccountToken()
-    let _url = "https://chat.qwen.ai/api/chat/completions" 
-
     try {
-        if (stream) {
-            const chat_id = await generateChatID(token,model,enable_web_search?"search":"t2t")
-            // console.log("chat_id:"+chat_id)
-            if (!chat_id) {
-                // 如果生成chat_id失败，则返回错误
-                throw new Error()
-            } else {
-                req.body.chat_id = chat_id
-            }
-            _url = "https://chat.qwen.ai/api/v2/chat/completions?chat_id="+chat_id
-        }
-
-        const response_data = await sendChatRequest(req.body,token,_url)
+        const response_data = await sendChatRequest(req.body)
 
         if (!response_data.status || !response_data.response) {
             res.status(500)
@@ -357,7 +343,7 @@ const handleChatCompletion = async (req, res) => {
  * @param {*} token 
  * @returns {Promise<string|null>} 返回生成的chat_id，如果失败则返回null
  */
-const generateChatID = async (token,model,chatType) => {
+const generateChatID = async (token, model, chatType) => {
     try {
         const response_data = await axios.post("https://chat.qwen.ai/api/v2/chats/new", {
             "title": "New Chat",
