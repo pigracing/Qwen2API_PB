@@ -14,6 +14,9 @@ RUN npm install
 # 复制应用代码
 COPY . .
 
+# 构建前端应用
+RUN cd public && npm install && npm run build
+
 # 设置权限
 RUN chmod 777 /app
 
