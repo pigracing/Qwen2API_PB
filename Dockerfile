@@ -1,57 +1,33 @@
-# 多阶段构建 - 构建阶段
-FROM node:lts-alpine AS builder
+FROM node:lts-alpine
 
-# 设置工作目录
+# 全局安装PM2
+RUN npm install -g pm2
+
 WORKDIR /app
 
-# 复制根目录的 package 文件并安装后端依赖
+# 复制package文件
 COPY package*.json ./
-RUN npm ci --only=production && npm cache clean --force
 
-# 复制前端 package 文件并安装前端依赖
-COPY public/package*.json ./public/
-RUN cd public && npm ci && npm cache clean --force
+# 安装依赖
+RUN npm install
 
-# 复制所有源代码
+# 复制应用代码
 COPY . .
 
 # 构建前端应用
-RUN cd public && npm run build
+RUN cd public && npm install && npm run build
 
-# 生产阶段
-FROM node:lts-alpine AS production
-
-# 创建非 root 用户
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nextjs -u 1001
-
-# 设置工作目录
-WORKDIR /app
-
-# 复制 package 文件
-COPY package*.json ./
-
-# 安装生产依赖
-RUN npm ci --only=production && \
-    npm cache clean --force && \
-    rm -rf /tmp/*
-
-# 从构建阶段复制必要文件
-COPY --from=builder --chown=nextjs:nodejs /app .
-
-# 删除前端源码和 node_modules（保留构建产物）
+# 删除前端不必要文件
 RUN rm -rf public/src public/node_modules public/package*.json
 
-# 创建日志目录并设置权限
-RUN mkdir -p logs && \
-    chown -R nextjs:nodejs /app && \
-    chmod -R 755 /app
+# 设置权限
+RUN chmod 777 /app
 
-# 切换到非 root 用户
-USER nextjs
+# 创建日志目录
+RUN mkdir -p logs
 
-# 暴露端口
+# 暴露端口（通过环境变量SERVICE_PORT控制）
 EXPOSE 3000
 
-# 启动应用
+# 使用PM2启动应用，并保持容器运行
 CMD ["npm", "start"]
