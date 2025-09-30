@@ -24,7 +24,7 @@ class DataPersistence {
           return await this._loadFromRedis()
         case 'file':
           return await this._loadFromFile()
-        case 'env':
+        case 'none':
           return await this._loadFromEnv()
         default:
           logger.error(`不支持的数据保存模式: ${config.dataSaveMode}`, 'DATA')
