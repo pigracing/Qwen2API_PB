@@ -338,36 +338,6 @@ const handleChatCompletion = async (req, res) => {
     }
 }
 
-/**
- * 生成chat_id
- * @param {*} token 
- * @returns {Promise<string|null>} 返回生成的chat_id，如果失败则返回null
- */
-const generateChatID = async (token, model, chatType) => {
-    try {
-        const response_data = await axios.post("https://chat.qwen.ai/api/v2/chats/new", {
-            "title": "New Chat",
-            "models": [
-                model
-            ],
-            "chat_mode": "normal",
-            "chat_type": chatType,
-            "timestamp": new Date().getTime()
-        }, {
-            headers: {
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
-            }
-        })
-
-        return response_data.data?.data?.id || null
-
-    } catch (error) {
-        logger.error('生成chat_id失败', 'CHAT', '', error.message)
-        return null
-    }
-}
-
 module.exports = {
     handleChatCompletion,
     handleStreamResponse,

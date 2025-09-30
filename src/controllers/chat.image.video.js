@@ -4,6 +4,7 @@ const { setResponseHeaders } = require('./chat.js')
 const accountManager = require('../utils/account.js')
 const { sleep } = require('../utils/tools.js')
 const { generateChatID } = require('../utils/request.js')
+const config = require('../config/index.js')
 
 /**
  * 主要的聊天完成处理函数
@@ -35,7 +36,7 @@ const handleImageVideoCompletion = async (req, res) => {
             ]
         }
 
-        const chat_id = await generateChatID(token)
+        const chat_id = await generateChatID(token,model)
 
         if (!chat_id) {
             // 如果生成chat_id失败，则返回错误
@@ -147,7 +148,9 @@ const handleImageVideoCompletion = async (req, res) => {
         const response_data = await axios.post(`https://chat.qwen.ai/api/v2/chat/completions?chat_id=${chat_id}`, reqBody, {
             headers: {
                 "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
             },
             responseType: newChatType == 't2i' ? 'stream' : 'json',
             timeout: 1000 * 60 * 5
@@ -291,7 +294,9 @@ const getVideoTaskStatus = async (videoTaskID, token) => {
         const response_data = await axios.get(`https://chat.qwen.ai/api/v1/tasks/status/${videoTaskID}`, {
             headers: {
                 "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/json"
+                'Content-Type': 'application/json',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
             }
         })
 
