@@ -62,7 +62,7 @@ class Account {
             this.accountTokens = await this.dataPersistence.loadAccounts()
 
             // 如果是环境变量模式，需要进行登录获取令牌
-            if (config.dataSaveMode === 'env' && this.accountTokens.length > 0) {
+            if (config.dataSaveMode === 'none' && this.accountTokens.length > 0) {
                 await this._loginEnvironmentAccounts()
             }
 
