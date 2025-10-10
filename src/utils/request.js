@@ -30,7 +30,7 @@ const sendChatRequest = async (body) => {
                 'Authorization': `Bearer ${currentToken}`,
                 'Content-Type': 'application/json',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
+                ...(config.ssxmodItna && { 'Cookie': `token=${currentToken};ssxmod_itna=${config.ssxmodItna}` })
             },
             responseType: body.stream ? 'stream' : 'json',
             timeout: 60 * 1000,
@@ -41,7 +41,7 @@ const sendChatRequest = async (body) => {
 
         const chat_id = await generateChatID(currentToken,body.model)
 
-        logger.network(`发送聊天请求`, 'REQUEST')
+        logger.network(`发送聊天请求`, 'REQUEST:'+chat_id)
         const response = await axios.post("https://chat.qwen.ai/api/v2/chat/completions?chat_id=" + chat_id, {
             ...body,
             chat_id: chat_id
@@ -80,17 +80,17 @@ const generateChatID = async (currentToken,model) => {
                 model
             ],
             "chat_mode": "local",
-            "chat_type": "t2i",
+            "chat_type": "t2t",
             "timestamp": new Date().getTime()
         }, {
             headers: {
                 'Authorization': `Bearer ${currentToken}`,
                 'Content-Type': 'application/json',
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna}` })
+                ...(config.ssxmodItna && { 'Cookie': `token=${currentToken};ssxmod_itna=${config.ssxmodItna}` })
             }
         })
-
+        console.log(JSON.stringify(response_data.data))
         return response_data.data?.data?.id || null
 
     } catch (error) {
