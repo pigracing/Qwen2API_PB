@@ -38,6 +38,8 @@ const config = {
     logDir: process.env.LOG_DIR || "./logs",
     maxLogFileSize: parseInt(process.env.MAX_LOG_FILE_SIZE) || 10,
     maxLogFiles: parseInt(process.env.MAX_LOG_FILES) || 5,
+    ssxmodItna: process.env.SSXMOD_ITNA || "",
+    ssxmodItna2: process.env.SSXMOD_ITNA || ""
 }
 
 module.exports = config

@@ -33,6 +33,7 @@ const sendChatRequest = async (body) => {
                 "Connection": "keep-alive",
                 "Accept": "*/*",
                 "Accept-Encoding": "gzip, deflate, br",
+                ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna};ssxmod_itna2=${config.ssxmodItna2}` })
             },
             responseType: body.stream ? 'stream' : 'json',
             timeout: 60 * 1000,
