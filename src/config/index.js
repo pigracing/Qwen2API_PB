@@ -38,8 +38,8 @@ const config = {
     logDir: process.env.LOG_DIR || "./logs",
     maxLogFileSize: parseInt(process.env.MAX_LOG_FILE_SIZE) || 10,
     maxLogFiles: parseInt(process.env.MAX_LOG_FILES) || 5,
-    ssxmodItna: process.env.SSXMOD_ITNA || "",
-    ssxmodItna2: process.env.SSXMOD_ITNA || ""
+    ssxmodItna: process.env.SSXMOD_ITNA || "1-Gqfx0DR70QdiqY5i7G7GqDODkAb07qYWDzxC5iOD_xQ5K08D6GDBRRQpq9YP0=CdiYiEhqqiKxC5D/Ai7eDZDGKQDqx0Er0CQ00t=lQYWYTelGi4xx=K7SAYuziWtAGbeiBEeBDMfOwM6z4hoqQGN9S4hrDB3DbqDyFiro5xGGj4GwDGoD34DiDDPDbSrDAMeD7qDFlmnTrPWDm4GWleGfDDoDYRTQxitoDDUA8nwa4cDD0L04Lm5SfayKZZeN31x1EG4Nx0UaDBd4/9DNqKC2=Ga12FMOa4TDzqzDtqcT8ZrNIoWHT19riGqjwqKr_K0YYDTFDPKDe3R4nDx22q/R4gxx1GYGDecA_YrHDgYDDWYh5DlmtG487e2wz9qsSke5j53xrcjIpexLr=q0QM7xM05qoYFBxZDhiD4rm5Erro444D",
+    ssxmodItna2: process.env.SSXMOD_ITNA || "1-Gqfx0DR70QdiqY5i7G7GqDODkAb07qYWDzxC5iOD_xQ5K08D6GDBRRQpq9YP0=CdiYiEhqqiKxCeDAKPehqmKxj_xEt1DGNdb1GiS4q7rQi3xRdAGZGWssrGZ2yudGMGdXXOhGsGIXn50U2/qdtm_4VzDL_tmD4EA3MFGD2tn=cmbK46qIP/3=Nhh4UR8WroaLQ51hxbaTGfj3P3cWNkiQVSm0xGYTXWexYS6uaEuhx0qK40MF5hmQ5CA5=0bOqkq6fo0Lhtmaj4S0zX1irTn7sV3QXf8xz0_5NV=QYlbW5X1drd9cssunr=e3aPOamriD4DKzjwfGqq755nKefi6e0_D29GYb7D40xzn33eRPQ4eQ4q7R1QRE=mG7h5nqWzbbjrxD"
 }
 
 module.exports = config
