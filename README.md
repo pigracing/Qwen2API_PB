@@ -44,10 +44,14 @@ SIMPLE_MODEL_MAP=false        # 简化模型映射 (true/false)
 
 # 🗄️ 数据存储
 DATA_SAVE_MODE=none           # 数据保存模式 (none/file/redis)
-REDIS_URL=                    # Redis 连接地址 (可选)
+REDIS_URL=                    # Redis 连接地址 (可选，使用TLS时为rediss://)
 
 # 📸 缓存配置
 CACHE_MODE=default            # 图片缓存模式 (default/file)
+
+# 🔑 高级配置
+SSXMOD_ITNA=                  # Qwen认证Cookie (可选)
+SSXMOD_ITNA2=                 # Qwen认证Cookie (可选)
 ```
 
 #### 📋 配置说明
@@ -63,8 +67,10 @@ CACHE_MODE=default            # 图片缓存模式 (default/file)
 | `OUTPUT_THINK` | 是否显示 AI 思考过程 | `true` 或 `false` |
 | `SIMPLE_MODEL_MAP` | 简化模型映射，只返回基础模型不包含变体 | `true` 或 `false` |
 | `DATA_SAVE_MODE` | 数据持久化方式 | `none`/`file`/`redis` |
-| `REDIS_URL` | Redis 数据库连接 | `redis://localhost:6379` |
+| `REDIS_URL` | Redis 数据库连接地址，使用TLS加密时需使用 `rediss://` 协议 | `redis://localhost:6379` 或 `rediss://xxx.upstash.io` |
 | `CACHE_MODE` | 图片缓存存储方式 | `default`/`file` |
+| `SSXMOD_ITNA` | Qwen 认证 Cookie 值，用于发送请求 | `1-Gqfx0DR70Q...` |
+| `SSXMOD_ITNA2` | Qwen 认证 Cookie 值，用于发送请求 | `1-Gqfx0DR70Q...` |
 | `LOG_LEVEL` | 日志级别 | `DEBUG`/`INFO`/`WARN`/`ERROR` |
 | `ENABLE_FILE_LOG` | 是否启用文件日志 | `true` 或 `false` |
 | `LOG_DIR` | 日志文件目录 | `./logs` |
@@ -124,6 +130,29 @@ caches/
 ```
 
 > 💡 **提示**: 可以在 [Upstash](https://upstash.com/) 免费创建 Redis 实例，使用 TLS 协议时地址格式为 `rediss://...`
+
+#### 🔑 SSXMOD_ITNA/SSXMOD_ITNA2 配置说明
+
+`SSXMOD_ITNA` 和 `SSXMOD_ITNA2` 是 Qwen API 的认证 Cookie 参数，用于发送请求。
+
+**配置方法:**
+1. 使用浏览器访问 [https://chat.qwen.ai](https://chat.qwen.ai)
+2. 打开浏览器开发者工具（F12），切换到 "网络(Network)" 标签
+3. 刷新页面或发送一条消息
+4. 在网络请求中找到任意请求，检查请求头中的 `Cookie` 字段
+5. 复制 `ssxmod_itna` 和 `ssxmod_itna2` 的值到环境变量中
+
+**配置示例:**
+```bash
+SSXMOD_ITNA=1-Gqfx0DR70QdiqY5i7G7GqDODkAb07qYWDzxC5iOD_xQ5K08D6GDBRRQpq9YP0=...
+SSXMOD_ITNA2=1-Gqfx0DR70QdiqY5i7G7GqDODkAb07qYWDzxC5iOD_xQ5K08D6GDBRRQpq9YP0=...
+```
+
+**作用说明:**
+- 这些 Cookie 值用于在请求时进行身份验证
+- 如果不配置，将使用默认值
+
+> ⚠️ **注意**: 这些 Cookie 值包含敏感信息，请妥善保管，不要分享给他人。
 
 <div>
 <img src="./docs/images/upstash.png" alt="Upstash Redis" width="600">
