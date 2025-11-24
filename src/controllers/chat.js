@@ -229,9 +229,9 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
 }
 
 /**
- * 处理非流式响应
+ * 处理非流式响应（从流式数据累积完整响应）
  * @param {object} res - Express 响应对象
- * @param {object} response - 上游响应数据
+ * @param {object} response - 上游响应流
  * @param {boolean} enable_thinking - 是否启用思考模式
  * @param {boolean} enable_web_search - 是否启用网络搜索
  * @param {string} model - 模型名称
@@ -239,8 +239,19 @@ const handleStreamResponse = async (res, response, enable_thinking, enable_web_s
  */
 const handleNonStreamResponse = async (res, response, enable_thinking, enable_web_search, model, requestBody = null) => {
     try {
-        // console.log(JSON.stringify(response))
-        const content = response.data.choices[0].message.content
+        const decoder = new TextDecoder('utf-8')
+        let buffer = ''
+        let fullContent = ''
+        let web_search_info = null
+        let thinking_start = false
+        let thinking_end = false
+
+        // Token消耗量统计
+        let totalTokens = {
+            prompt_tokens: 0,
+            completion_tokens: 0,
+            total_tokens: 0
+        }
 
         // 提取prompt文本用于token估算
         let promptText = ''
@@ -255,22 +266,113 @@ const handleNonStreamResponse = async (res, response, enable_thinking, enable_we
             }).join('\n')
         }
 
-        // 尝试从上游响应中提取真实的usage数据
-        let usage = response.usage || null
+        // 处理流式响应并累积内容
+        await new Promise((resolve, reject) => {
+            response.on('data', async (chunk) => {
+                const decodeText = decoder.decode(chunk, { stream: true })
+                buffer += decodeText
 
-        // 计算token使用量
-        if (!usage) {
-            usage = createUsageObject(requestBody?.messages || promptText, content, null)
-            logger.info(`非流式使用tiktoken计算 - Prompt: ${usage.prompt_tokens}, Completion: ${usage.completion_tokens}, Total: ${usage.total_tokens}`, 'CHAT')
+                const chunks = []
+                let startIndex = 0
+
+                while (true) {
+                    const dataStart = buffer.indexOf('data: ', startIndex)
+                    if (dataStart === -1) break
+
+                    const dataEnd = buffer.indexOf('\n\n', dataStart)
+                    if (dataEnd === -1) break
+
+                    const dataChunk = buffer.substring(dataStart, dataEnd).trim()
+                    chunks.push(dataChunk)
+
+                    startIndex = dataEnd + 2
+                }
+
+                if (startIndex > 0) {
+                    buffer = buffer.substring(startIndex)
+                }
+
+                for (const item of chunks) {
+                    try {
+                        let dataContent = item.replace("data: ", '')
+                        let decodeJson = isJson(dataContent) ? JSON.parse(dataContent) : null
+                        if (decodeJson === null || !decodeJson.choices || decodeJson.choices.length === 0) {
+                            continue
+                        }
+
+                        // 提取真实的usage信息（如果上游API提供）
+                        if (decodeJson.usage) {
+                            totalTokens = {
+                                prompt_tokens: decodeJson.usage.prompt_tokens || totalTokens.prompt_tokens,
+                                completion_tokens: decodeJson.usage.completion_tokens || totalTokens.completion_tokens,
+                                total_tokens: decodeJson.usage.total_tokens || totalTokens.total_tokens
+                            }
+                        }
+
+                        // 处理 web_search 信息
+                        if (decodeJson.choices[0].delta && decodeJson.choices[0].delta.name === 'web_search') {
+                            web_search_info = decodeJson.choices[0].delta.extra.web_search_info
+                        }
+
+                        if (!decodeJson.choices[0].delta || !decodeJson.choices[0].delta.content ||
+                            (decodeJson.choices[0].delta.phase !== 'think' && decodeJson.choices[0].delta.phase !== 'answer')) {
+                            continue
+                        }
+
+                        let content = decodeJson.choices[0].delta.content
+
+                        // 处理thinking模式
+                        if (decodeJson.choices[0].delta.phase === 'think' && !thinking_start) {
+                            thinking_start = true
+                            if (web_search_info) {
+                                const webSearchTable = await accountManager.generateMarkdownTable(web_search_info, config.searchInfoMode)
+                                content = `<think>\n\n${webSearchTable}\n\n${content}`
+                            } else {
+                                content = `<think>\n\n${content}`
+                            }
+                        }
+                        if (decodeJson.choices[0].delta.phase === 'answer' && !thinking_end && thinking_start) {
+                            thinking_end = true
+                            content = `\n\n</think>\n${content}`
+                        }
+
+                        fullContent += content
+                    } catch (error) {
+                        logger.error('非流式数据处理错误', 'CHAT', '', error)
+                    }
+                }
+            })
+
+            response.on('end', () => {
+                resolve()
+            })
+
+            response.on('error', (error) => {
+                logger.error('非流式响应流读取错误', 'CHAT', '', error)
+                reject(error)
+            })
+        })
+
+        // 处理最终的搜索信息
+        if ((config.outThink === false || !enable_thinking) && web_search_info && config.searchInfoMode === "text") {
+            const webSearchTable = await accountManager.generateMarkdownTable(web_search_info, "text")
+            fullContent += `\n\n---\n${webSearchTable}`
+        }
+
+        // 计算最终的token使用量
+        if (totalTokens.prompt_tokens === 0 && totalTokens.completion_tokens === 0) {
+            totalTokens = createUsageObject(requestBody?.messages || promptText, fullContent, null)
+            logger.info(`非流式使用tiktoken计算 - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
         } else {
-            logger.info(`非流式使用上游真实Token - Prompt: ${usage.prompt_tokens}, Completion: ${usage.completion_tokens}, Total: ${usage.total_tokens}`, 'CHAT')
+            logger.info(`非流式使用上游真实Token - Prompt: ${totalTokens.prompt_tokens}, Completion: ${totalTokens.completion_tokens}, Total: ${totalTokens.total_tokens}`, 'CHAT')
         }
 
         // 确保token数量的有效性
-        usage.prompt_tokens = Math.max(0, usage.prompt_tokens || 0)
-        usage.completion_tokens = Math.max(0, usage.completion_tokens || 0)
-        usage.total_tokens = usage.prompt_tokens + usage.completion_tokens
+        totalTokens.prompt_tokens = Math.max(0, totalTokens.prompt_tokens || 0)
+        totalTokens.completion_tokens = Math.max(0, totalTokens.completion_tokens || 0)
+        totalTokens.total_tokens = totalTokens.prompt_tokens + totalTokens.completion_tokens
 
+        // 返回完整的JSON响应
         const bodyTemplate = {
             "id": `chatcmpl-${generateUUID()}`,
             "object": "chat.completion",
@@ -281,12 +383,12 @@ const handleNonStreamResponse = async (res, response, enable_thinking, enable_we
                     "index": 0,
                     "message": {
                         "role": "assistant",
-                        "content": content
+                        "content": fullContent
                     },
                     "finish_reason": "stop"
                 }
             ],
-            "usage": usage
+            "usage": totalTokens
         }
         res.json(bodyTemplate)
     } catch (error) {
