@@ -29,13 +29,13 @@ const sendChatRequest = async (body) => {
             headers: {
                 'authorization': `Bearer ${currentToken}`,
                 'Content-Type': 'application/json',
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0', 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0',
                 "Connection": "keep-alive",
                 "Accept": "*/*",
                 "Accept-Encoding": "gzip, deflate, br",
                 ...(config.ssxmodItna && { 'Cookie': `ssxmod_itna=${config.ssxmodItna};ssxmod_itna2=${config.ssxmodItna2}` })
             },
-            responseType: body.stream ? 'stream' : 'json',
+            responseType: 'stream', // Always use streaming (upstream doesn't support stream=false)
             timeout: 60 * 1000,
         }
 
@@ -47,6 +47,7 @@ const sendChatRequest = async (body) => {
         logger.network(`发送聊天请求`, 'REQUEST')
         const response = await axios.post("https://chat.qwen.ai/api/v2/chat/completions?chat_id=" + chat_id, {
             ...body,
+            stream: true, // Always request streaming (upstream doesn't support stream=false)
             chat_id: chat_id
         }, requestConfig)
 
